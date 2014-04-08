@@ -1,0 +1,5 @@
+bin/
+src/
+develop-eggs/
+parts/
+.*.cfg
