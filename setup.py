@@ -12,4 +12,5 @@ setup (name = "uncompyle2",
        url = "http://github.com/sysfrog/uncompyle",
        packages=['uncompyle2'],
        scripts=['scripts/uncompyle2'],
+       install_requires=['xoutil>=1.5.2'],
       )
