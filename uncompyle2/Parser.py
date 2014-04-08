@@ -13,10 +13,9 @@ from __future__ import (division as _py3_division,
 __all__ = ['parse', 'AST', 'ParserError', 'Parser']
 
 from .spark import GenericASTBuilder
-import string, exceptions, sys
 from xoutil.collections import UserList
 
-from .Scanner import Token
+from .eight import override, py27, py3k
 
 try:
     from sys import intern  # Py3k
@@ -42,7 +41,7 @@ class AST(UserList):
     def __repr__(self, indent=''):
         rv = str(self.type)
         for k in self:
-            rv = rv + '\n' + string.replace(str(k), '\n', '\n   ')
+            rv = rv + '\n' + str(k).replace(str('\n'), str('\n   '))
         return rv
 
 
@@ -53,7 +52,7 @@ class ParserError(Exception):
 
     def __str__(self):
         return "Syntax error at or near `%r' token at offset %s" % \
-               (self.token, self.offset)
+            (self.token, self.offset)
 
 
 class Parser(GenericASTBuilder):
@@ -113,10 +112,10 @@ class Parser(GenericASTBuilder):
         lc_body ::= expr LIST_APPEND
         '''
 
+    @override(py27)
     def p_setcomp(self, args):
         '''
         expr ::= setcomp
-
         setcomp ::= LOAD_SETCOMP MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
 
         stmt ::= setcomp_func
@@ -140,19 +139,52 @@ class Parser(GenericASTBuilder):
         comp_for ::= expr _for designator comp_iter JUMP_BACK
         '''
 
+    @p_setcomp.override(py3k)
+    def p_setcomp(self, args):
+        '''
+        expr ::= setcomp
+        setcomp ::= LOAD_SETCOMP LOAD_CONST MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
 
+        stmt ::= setcomp_func
+
+        setcomp_func ::= BUILD_SET_0 LOAD_FAST FOR_ITER designator comp_iter
+                JUMP_BACK RETURN_VALUE RETURN_LAST
+
+        comp_iter ::= comp_if
+        comp_iter ::= comp_ifnot
+        comp_iter ::= comp_for
+        comp_iter ::= comp_body
+        comp_body ::= set_comp_body
+        comp_body ::= gen_comp_body
+        comp_body ::= dict_comp_body
+        set_comp_body ::= expr SET_ADD
+        gen_comp_body ::= expr YIELD_VALUE POP_TOP
+        dict_comp_body ::= expr expr MAP_ADD
+
+        comp_if ::= expr jmp_false comp_iter
+        comp_ifnot ::= expr jmp_true comp_iter
+        comp_for ::= expr _for designator comp_iter JUMP_BACK
+        '''
+
+    @override(py27)
     def p_genexpr(self, args):
         '''
         expr ::= genexpr
-
         genexpr ::= LOAD_GENEXPR MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
-
         stmt ::= genexpr_func
-
         genexpr_func ::= LOAD_FAST FOR_ITER designator comp_iter JUMP_BACK
         '''
 
+    @p_genexpr.override(py3k)
+    def p_genexpr(self, args):
+        '''
+        expr ::= genexpr
+        genexpr ::= LOAD_GENEXPR LOAD_CONST MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
+        stmt ::= genexpr_func
+        genexpr_func ::= LOAD_FAST FOR_ITER designator comp_iter JUMP_BACK
+        '''
 
+    @override(py27)
     def p_dictcomp(self, args):
         '''
         expr ::= dictcomp
@@ -164,6 +196,17 @@ class Parser(GenericASTBuilder):
 
         '''
 
+    @p_dictcomp.override(py3k)
+    def p_dictcomp(self, args):
+        '''
+        expr ::= dictcomp
+        dictcomp ::= LOAD_DICTCOMP LOAD_CONST MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
+        stmt ::= dictcomp_func
+
+        dictcomp_func ::= BUILD_MAP LOAD_FAST FOR_ITER designator
+                comp_iter JUMP_BACK RETURN_VALUE RETURN_LAST
+
+        '''
 
     def p_augmented_assign(self, args):
         '''
@@ -761,7 +804,7 @@ def parse(tokens, customize):
         p.customized[k] = None
 
         #nop = lambda self, args: None
-        op = k[:string.rfind(k, '_')]
+        op = k[:k.rfind('_')]
         if op in ('BUILD_LIST', 'BUILD_TUPLE', 'BUILD_SET'):
             rule = 'build_list ::= ' + 'expr '*v + k
         elif op in ('UNPACK_TUPLE', 'UNPACK_SEQUENCE'):

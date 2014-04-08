@@ -7,8 +7,14 @@ import struct
 
 __all__ = ['magics', 'versions']
 
+
 def __build_magic(magic):
-    return struct.pack(str('Hcc'), magic, str('\r'), str('\n'))
+    from xoutil.six import PY3
+    if PY3:
+        return struct.pack(str('Hcc'), magic, '\r'.encode(), '\n'.encode())
+    else:
+        return struct.pack(str('Hcc'), magic, str('\r'), str('\n'))
+
 
 def __by_version(magics):
     by_version = {}

@@ -16,8 +16,6 @@ import types
 import dis
 from collections import namedtuple
 from array import array
-from operator import itemgetter
-import sys
 
 try:
     from sys import intern  # Py3k
@@ -26,12 +24,27 @@ except ImportError:
 
 HAVE_ARGUMENT = dis.HAVE_ARGUMENT
 
-globals().update({k.replace('+','_'):v for (k,v) in list(dis.opmap.items())})
+globals().update({k.replace('+', '_'):v for (k,v) in list(dis.opmap.items())})
 
 PJIF = POP_JUMP_IF_FALSE
 PJIT = POP_JUMP_IF_TRUE
 JA = JUMP_ABSOLUTE
 JF = JUMP_FORWARD
+
+
+from xoutil.six import PY3, PY2
+if PY3:
+    PRINT_ITEM = PRINT_ITEM_TO = PRINT_NEWLINE = PRINT_NEWLINE_TO = None
+    STORE_SLICE_0 = STORE_SLICE_1 = STORE_SLICE_2 = STORE_SLICE_3 = None
+    DELETE_SLICE_0 = DELETE_SLICE_1 = DELETE_SLICE_2 = DELETE_SLICE_3 = None
+    EXEC_STMT = None
+    DUP_TOPX = None
+
+if PY2:
+    DUP_TOP_TWO = None
+
+del PY3, PY2
+
 
 class Token(object):
     """
@@ -40,7 +53,8 @@ class Token(object):
     A byte-code token is equivalent to the contents of one line
     as output by dis.dis().
     """
-    def __init__(self, type_, attr=None, pattr=None, offset=-1, linestart=False):
+    def __init__(self, type_, attr=None, pattr=None, offset=-1,
+                 linestart=False):
         self.type = intern(str(type_))
         self.attr = attr
         self.pattr = pattr
@@ -54,7 +68,9 @@ class Token(object):
         else:
             return cmp(self.type, o)
 
-    def __repr__(self):		return str(self.type)
+    def __repr__(self):
+        return str(self.type)
+
     def __str__(self):
         pattr = self.pattr
         if self.linestart:
@@ -62,8 +78,11 @@ class Token(object):
         else:
             return '%s\t%-17s %r' % (self.offset, self.type, pattr)
 
-    def __hash__(self):		return hash(self.type)
-    def __getitem__(self, i):	raise IndexError
+    def __hash__(self):
+        return hash(self.type)
+
+    def __getitem__(self, i):
+        raise IndexError
 
 
 class Code(object):
@@ -109,7 +128,7 @@ class Scanner(object):
                 n = i + 1
 
         fixed_code = array(str('B'))
-        linestartoffsets = {a:b for (a, b) in linestarts[1:]}
+        linestartoffsets = {a: b for (a, b) in linestarts[1:]}
         newlinestarts = linestarts[0:1]
         old_to_new = {}
         new_to_old = {}
@@ -118,7 +137,7 @@ class Scanner(object):
             old_to_new[i] = m
             new_to_old[m] = i
             if i in linestartoffsets:
-                newlinestarts.append( (m, linestartoffsets[i]) )
+                newlinestarts.append((m, linestartoffsets[i]))
             if code[i] != NOP:
                 fixed_code.append(code[i])
                 m += 1
@@ -151,10 +170,7 @@ class Scanner(object):
                 varname_index = code[i+4] + code[i+5]*256
                 name_index = code[i+1] + code[i+2]*256
                 varnames[varname_index] = co.co_names[name_index]
-
-
         return newlinestarts
-
 
     def disassemble(self, co, classname=None, deob=0):
         """
@@ -199,8 +215,7 @@ class Scanner(object):
             (prev_start_byte, prev_line_no) = (start_byte, line_no)
         while j < n:
             self.lines.append(linetuple(prev_line_no, n))
-            j+=1
-
+            j += 1
         if classname:
             classname = '_' + classname.lstrip('_') + '__'
             def unmangle(name):
@@ -208,9 +223,10 @@ class Scanner(object):
                     return name[len(classname) - 2:]
                 return name
 
-            free = [ unmangle(name) for name in (co.co_cellvars + co.co_freevars) ]
-            names = [ unmangle(name) for name in co.co_names ]
-            varnames = [ unmangle(name) for name in varnames ]
+            free = [unmangle(name)
+                    for name in (co.co_cellvars + co.co_freevars)]
+            names = [unmangle(name) for name in co.co_names]
+            varnames = [unmangle(name) for name in varnames]
         else:
             free = co.co_cellvars + co.co_freevars
             names = co.co_names
@@ -252,12 +268,12 @@ class Scanner(object):
                 k = 0
                 for j in cf[offset]:
                     rv.append(Token('COME_FROM', None, repr(j),
-                                    offset="%s_%d" % (offset, k) ))
+                                    offset="%s_%d" % (offset, k)))
                     k += 1
 
             op = code[offset]
             opname = dis.opname[op]
-            oparg = None; pattr = None
+            oparg = pattr = None
             if op >= HAVE_ARGUMENT:
                 oparg = code[offset+1] + code[offset+2] * 256 + extended_arg
                 extended_arg = 0
@@ -266,7 +282,7 @@ class Scanner(object):
                     continue
                 if op in dis.hasconst:
                     const = co.co_consts[oparg]
-                    if type(const) == types.CodeType:
+                    if isinstance(const, types.CodeType):
                         oparg = const
                         if const.co_name == '<lambda>':
                             assert opname == 'LOAD_CONST'
@@ -299,16 +315,14 @@ class Scanner(object):
                     pattr = free[oparg]
 
             if op in (BUILD_LIST, BUILD_TUPLE, BUILD_SET, BUILD_SLICE,
-                            UNPACK_SEQUENCE,
-                            MAKE_FUNCTION, CALL_FUNCTION, MAKE_CLOSURE,
-                            CALL_FUNCTION_VAR, CALL_FUNCTION_KW,
-                            CALL_FUNCTION_VAR_KW, DUP_TOPX, RAISE_VARARGS
-                            ):
+                      UNPACK_SEQUENCE,
+                      MAKE_FUNCTION, CALL_FUNCTION, MAKE_CLOSURE,
+                      CALL_FUNCTION_VAR, CALL_FUNCTION_KW,
+                      CALL_FUNCTION_VAR_KW, DUP_TOPX, RAISE_VARARGS):
                 # CE - Hack for >= 2.5
                 #      Now all values loaded via LOAD_CLOSURE are packed into
                 #      a tuple before calling MAKE_CLOSURE.
-                if op == BUILD_TUPLE and \
-                    code[self.prev[offset]] == LOAD_CLOSURE:
+                if op == BUILD_TUPLE and code[self.prev[offset]] == LOAD_CLOSURE:
                     continue
                 else:
                     opname = '%s_%d' % (opname, oparg)
@@ -322,7 +336,6 @@ class Scanner(object):
                         opname = 'CONTINUE'
                     else:
                         opname = 'JUMP_BACK'
-
             elif op == LOAD_GLOBAL:
                 if offset in self.load_asserts:
                     opname = 'LOAD_ASSERT'
@@ -331,12 +344,14 @@ class Scanner(object):
                     opname = 'RETURN_END_IF'
 
             if offset not in replace:
-                rv.append(Token(opname, oparg, pattr, offset, linestart = offset in linestartoffsets))
+                rv.append(Token(opname, oparg, pattr, offset,
+                                linestart=offset in linestartoffsets))
             else:
-                rv.append(Token(replace[offset], oparg, pattr, offset, linestart = offset in linestartoffsets))
+                rv.append(Token(replace[offset], oparg, pattr, offset,
+                                linestart=offset in linestartoffsets))
 
         if self.showasm:
-            out = self.out # shortcut
+            out = self.out  # shortcut
             for t in rv:
                 print(t, file=out)
             print(file=out)
@@ -362,12 +377,11 @@ class Scanner(object):
 
         Return index to it or None if not found.
         """
+        from xoutil.types import is_collection
         code = self.code
-        assert(start>=0 and end<=len(code))
-
-        try:    None in instr
-        except: instr = [instr]
-
+        assert start >= 0 and end <= len(code)
+        if not is_collection(instr):
+            instr = [instr]
         pos = None
         distance = len(code)
         for i in self.op_range(start, end):
@@ -396,14 +410,12 @@ class Scanner(object):
 
         Return index to it or None if not found.
         """
-
+        from xoutil.types import is_collection
         code = self.code
-        if not (start>=0 and end<=len(code)):
+        if not (start >= 0 and end <= len(code)):
             return None
-
-        try:    None in instr
-        except: instr = [instr]
-
+        if not is_collection(instr):
+            instr = [instr]
         pos = None
         distance = len(code)
         for i in self.op_range(start, end):
@@ -423,7 +435,8 @@ class Scanner(object):
                             pos = i
         return pos
 
-    def all_instr(self, start, end, instr, target=None, include_beyond_target=False):
+    def all_instr(self, start, end, instr, target=None,
+                  include_beyond_target=False):
         """
         Find all <instr> in the block from start to end.
         <instr> is any python bytecode instruction or a list of opcodes
@@ -434,7 +447,7 @@ class Scanner(object):
         """
 
         code = self.code
-        assert(start>=0 and end<=len(code))
+        assert(start >= 0 and end <= len(code))
 
         try:    None in instr
         except: instr = [instr]
@@ -466,7 +479,7 @@ class Scanner(object):
 
     def build_stmt_indices(self):
         code = self.code
-        start = 0;
+        start = 0
         end = len(code)
 
         stmt_opcodes = {
@@ -476,7 +489,8 @@ class Scanner(object):
             STORE_GLOBAL, DELETE_GLOBAL, STORE_NAME, DELETE_NAME,
             STORE_ATTR, DELETE_ATTR, STORE_SUBSCR, DELETE_SUBSCR,
             RETURN_VALUE, RAISE_VARARGS, POP_TOP,
-            PRINT_EXPR, PRINT_ITEM, PRINT_NEWLINE, PRINT_ITEM_TO, PRINT_NEWLINE_TO,
+            PRINT_EXPR, PRINT_ITEM, PRINT_NEWLINE, PRINT_ITEM_TO,
+            PRINT_NEWLINE_TO,
             STORE_SLICE_0, STORE_SLICE_1, STORE_SLICE_2, STORE_SLICE_3,
             DELETE_SLICE_0, DELETE_SLICE_1, DELETE_SLICE_2, DELETE_SLICE_3,
             JUMP_ABSOLUTE, EXEC_STMT,
@@ -527,7 +541,7 @@ class Scanner(object):
                 j = self.prev[s]
                 while code[j] == JA:
                     j = self.prev[j]
-                if code[j] == LIST_APPEND: #list comprehension
+                if code[j] == LIST_APPEND:  # list comprehension
                     stmts.remove(s)
                     continue
             elif code[s] == POP_TOP and code[self.prev[s]] == ROT_TWO:
@@ -545,7 +559,6 @@ class Scanner(object):
             i = s
         slist += [len(code)] * (len(code)-len(slist))
 
-
     def remove_mid_line_ifs(self, ifs):
         filtered = []
         for i in ifs:
@@ -555,8 +568,8 @@ class Scanner(object):
             filtered.append(i)
         return filtered
 
-
-    def rem_or(self, start, end, instr, target=None, include_beyond_target=False):
+    def rem_or(self, start, end, instr, target=None,
+               include_beyond_target=False):
         """
         Find all <instr> in the block from start to end.
         <instr> is any python bytecode instruction or a list of opcodes
@@ -567,7 +580,7 @@ class Scanner(object):
         """
 
         code = self.code
-        assert(start>=0 and end<=len(code))
+        assert(start >= 0 and end <= len(code))
 
         try:    None in instr
         except: instr = [instr]
@@ -601,9 +614,9 @@ class Scanner(object):
         Return the next jump that was generated by an except SomeException:
         construct in a try...except...else clause or None if not found.
         """
-
         if self.code[start] == DUP_TOP:
-            except_match = self.first_instr(start, len(self.code), POP_JUMP_IF_FALSE)
+            except_match = self.first_instr(start, len(self.code),
+                                            POP_JUMP_IF_FALSE)
             if except_match:
                 jmp = self.prev[self.get_target(except_match)]
                 self.ignore_if.add(except_match)
@@ -623,13 +636,11 @@ class Scanner(object):
             elif op in (SETUP_EXCEPT, SETUP_WITH, SETUP_FINALLY):
                 count_SETUP_ += 1
 
-
     def restrict_to_parent(self, target, parent):
         """Restrict pos to parent boundaries."""
         if not (parent['start'] < target < parent['end']):
             target = parent['end']
         return target
-
 
     def detect_structure(self, pos, op=None):
         """
@@ -646,37 +657,36 @@ class Scanner(object):
 
         ## Detect parent structure
         parent = self.structs[0]
-        start  = parent['start']
-        end    = parent['end']
+        start = parent['start']
+        end = parent['end']
         for s in self.structs:
             _start = s['start']
-            _end   = s['end']
+            _end = s['end']
             if (_start <= pos < _end) and (_start >= start and _end <= end):
-                start  = _start
-                end    = _end
+                start = _start
+                end = _end
                 parent = s
 
         ## We need to know how many new structures were added in this run
         origStructCount = len(self.structs)
-
         if op == SETUP_LOOP:
             #import pdb; pdb.set_trace()
             start = pos+3
             target = self.get_target(pos, op)
-            end    = self.restrict_to_parent(target, parent)
+            end = self.restrict_to_parent(target, parent)
             if target != end:
                 self.fixed_jumps[pos] = end
 
             (line_no, next_line_byte) = self.lines[pos]
             jump_back = self.last_instr(start, end, JA,
-                                          next_line_byte, False)
+                                        next_line_byte, False)
 
             if jump_back and jump_back != self.prev[end] and code[jump_back+3] in (JA, JF):
                 if code[self.prev[end]] == RETURN_VALUE or \
                       (code[self.prev[end]] == POP_BLOCK and code[self.prev[self.prev[end]]] == RETURN_VALUE):
                     jump_back = None
 
-            if not jump_back: # loop suite ends in return. wtf right?
+            if not jump_back:  # loop suite ends in return. wtf right?
                 jump_back = self.last_instr(start, end, RETURN_VALUE) + 1
                 if not jump_back:
                     return
@@ -690,7 +700,7 @@ class Scanner(object):
             else:
                 if self.get_target(jump_back) >= next_line_byte:
                     jump_back = self.last_instr(start, end, JA,
-                                              start, False)
+                                                start, False)
 
                 if end > jump_back+4 and code[end] in (JF, JA):
                     if code[jump_back+4] in (JA, JF):
@@ -720,23 +730,23 @@ class Scanner(object):
 
             self.loops.append(target)
             self.structs.append({'type': loop_type + '-loop',
-                                   'start': target,
-                                   'end':   jump_back})
+                                 'start': target,
+                                 'end':   jump_back})
             if jump_back+3 != end:
                 self.structs.append({'type': loop_type + '-else',
-                                       'start': jump_back+3,
-                                       'end':   end})
+                                     'start': jump_back+3,
+                                     'end':   end})
         elif op == SETUP_EXCEPT:
-            start  = pos+3
+            start = pos+3
             target = self.get_target(pos, op)
-            end    = self.restrict_to_parent(target, parent)
+            end = self.restrict_to_parent(target, parent)
             if target != end:
                 self.fixed_jumps[pos] = end
                 #print target, end, parent
             ## Add the try block
             self.structs.append({'type':  'try',
-                                   'start': start,
-                                   'end':   end-4})
+                                 'start': start,
+                                 'end':   end-4})
             ## Now isolate the except and else blocks
             end_else = start_else = self.get_target(self.prev[end])
 
@@ -746,8 +756,8 @@ class Scanner(object):
                 jmp = self.next_except_jump(i)
                 if self.code[jmp] == RETURN_VALUE:
                     self.structs.append({'type':  'except',
-                                           'start': i,
-                                           'end':   jmp+1})
+                                         'start': i,
+                                         'end':   jmp+1})
                     i = jmp + 1
                 else:
                     if self.get_target(jmp) != start_else:
@@ -755,21 +765,19 @@ class Scanner(object):
                     if self.code[jmp] == JF:
                         self.fixed_jumps[jmp] = -1
                     self.structs.append({'type':  'except',
-                                   'start': i,
-                                   'end':   jmp})
+                                         'start': i,
+                                         'end':   jmp})
                     i = jmp + 3
 
             ## Add the try-else block
             if end_else != start_else:
                 r_end_else = self.restrict_to_parent(end_else, parent)
                 self.structs.append({'type':  'try-else',
-                                       'start': i+1,
-                                       'end':   r_end_else})
+                                     'start': i+1,
+                                     'end':   r_end_else})
                 self.fixed_jumps[i] = r_end_else
             else:
                 self.fixed_jumps[i] = i+1
-
-
         elif op in (PJIF, PJIT):
             start = pos+3
             target = self.get_target(pos, op)
@@ -781,12 +789,13 @@ class Scanner(object):
                 return
             #does this jump to right after another cond jump?
             # if so, it's part of a larger conditional
-            if (code[pre[target]] in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP,
-                    PJIF, PJIT)) and (target > pos):
+            if (code[pre[target]] in (JUMP_IF_FALSE_OR_POP,
+                                      JUMP_IF_TRUE_OR_POP,
+                                      PJIF, PJIT)) and (target > pos):
                 self.fixed_jumps[pos] = pre[target]
                 self.structs.append({'type':  'and/or',
-                                       'start': start,
-                                       'end':   pre[target]})
+                                     'start': start,
+                                     'end':   pre[target]})
                 return
 
             # is this an if and
@@ -826,7 +835,7 @@ class Scanner(object):
                     else:
                         self.fixed_jumps[pos] = match[-1]
                         return
-            else: # op == PJIT
+            else:  # op == PJIT
                 if (pos+3) in self.load_asserts:
                     if code[pre[rtarget]] == RAISE_VARARGS:
                         return
@@ -848,9 +857,7 @@ class Scanner(object):
                     elif code[next_target] in (JA, JF) and self.get_target(next_target) == self.get_target(target):
                         self.fixed_jumps[pos] = pre[next]
                         return
-
-
-            #don't add a struct for a while test, it's already taken care of
+            # don't add a struct for a while test, it's already taken care of
             if pos in self.ignore_if:
                 return
 
@@ -865,8 +872,8 @@ class Scanner(object):
                         rtarget = pre[rtarget]
                 else:
                     rtarget = pre[rtarget]
-
-            #does the if jump just beyond a jump op, then this is probably an if statement
+            # does the if jump just beyond a jump op, then this is probably an
+            # if statement
             if code[pre[rtarget]] in (JA, JF):
                 if_end = self.get_target(pre[rtarget])
 
@@ -878,20 +885,19 @@ class Scanner(object):
                 end = self.restrict_to_parent(if_end, parent)
 
                 self.structs.append({'type':  'if-then',
-                                       'start': start,
-                                       'end':   pre[rtarget]})
+                                     'start': start,
+                                     'end':   pre[rtarget]})
                 self.not_continue.add(pre[rtarget])
 
                 if rtarget < end:
                     self.structs.append({'type':  'if-else',
-                                       'start': rtarget,
-                                       'end':   end})
+                                         'start': rtarget,
+                                         'end':   end})
             elif code[pre[rtarget]] == RETURN_VALUE:
                 self.structs.append({'type':  'if-then',
-                                       'start': start,
-                                       'end':   rtarget})
+                                     'start': start,
+                                     'end':   rtarget})
                 self.return_end_ifs.add(pre[rtarget])
-
         elif op in (JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP):
             target = self.get_target(pos, op)
 #            if target > pos:
@@ -900,9 +906,6 @@ class Scanner(object):
 #                    self.fixed_jumps[pos] = unop_target
 #                else:
             self.fixed_jumps[pos] = self.restrict_to_parent(target, parent)
-
-
-
 
     def find_jump_targets(self, code):
         """
@@ -919,10 +922,10 @@ class Scanner(object):
 
         n = len(code)
         self.structs = [{'type':  'root',
-                           'start': 0,
-                           'end':   n-1}]
-        self.loops = []  ## All loop entry points
-        self.fixed_jumps = {} ## Map fixed jumps to their real destination
+                         'start': 0,
+                         'end':   n-1}]
+        self.loops = []  # All loop entry points
+        self.fixed_jumps = {}  # Map fixed jumps to their real destination
         self.ignore_if = set()
         self.build_stmt_indices()
         self.not_continue = set()
@@ -938,8 +941,6 @@ class Scanner(object):
             if op >= HAVE_ARGUMENT:
                 label = self.fixed_jumps.get(i)
                 oparg = code[i+1] + code[i+2] * 256
-
-
                 if label is None:
                     if op in hasjrel and op != FOR_ITER:
                         label = i + 3 + oparg
@@ -957,6 +958,7 @@ class Scanner(object):
 
 
 __scanners = {}
+
 
 def getscanner(version):
     if version not in __scanners:

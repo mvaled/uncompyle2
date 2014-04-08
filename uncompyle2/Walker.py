@@ -23,14 +23,14 @@
 #  format string and arguments (a la printf()) for the formatting engine.
 #  Escapes in the format string are:
 #
-#	%c	evaluate N[A] recursively*
-#	%C	evaluate N[A[0]]..N[A[1]-1] recursively, separate by A[2]*
-#	%,	print ',' if last %C only printed one item (for tuples--unused)
-#	%|	tab to current indentation level
-#	%+	increase current indentation level
-#	%-	decrease current indentation level
-#	%{...}	evaluate ... in context of N
-#	%%	literal '%'
+#       %c      evaluate N[A] recursively*
+#       %C      evaluate N[A[0]]..N[A[1]-1] recursively, separate by A[2]*
+#       %,      print ',' if last %C only printed one item (for tuples--unused)
+#       %|      tab to current indentation level
+#       %+      increase current indentation level
+#       %-      decrease current indentation level
+#       %{...}  evaluate ... in context of N
+#       %%      literal '%'
 #
 #  * indicates an argument (A) required.
 #
@@ -43,9 +43,16 @@ from __future__ import (division as _py3_division,
                         unicode_literals as _py3_unicode,
                         absolute_import as _py3_abs_import)
 
-import sys, re, io
-from types import ListType, TupleType, DictType, \
-     EllipsisType, IntType, CodeType
+import sys
+import re
+import io
+
+from types import CodeType
+try:
+    from types import EllipsisType, IntType
+except ImportError:
+    EllipsisType = type(Ellipsis)
+    IntType = int
 
 from .spark import GenericASTTraversal
 from . import Parser
@@ -58,260 +65,260 @@ minint = -sys.maxsize-1
 # the end of functions).
 
 RETURN_LOCALS = AST('return_stmt',
-			  [ AST('ret_expr', [AST('expr', [ Token('LOAD_LOCALS') ])]),
-			    Token('RETURN_VALUE')])
+                    [AST('ret_expr', [AST('expr', [Token('LOAD_LOCALS')])]),
+                     Token('RETURN_VALUE')])
 
 
-NONE = AST('expr', [ Token('LOAD_CONST', pattr=None) ] )
+NONE = AST('expr', [Token('LOAD_CONST', pattr=None)])
 
 RETURN_NONE = AST('stmt',
-		  [ AST('return_stmt',
-			[ NONE, Token('RETURN_VALUE')]) ])
+                  [AST('return_stmt',
+                       [NONE, Token('RETURN_VALUE')])])
 
 PASS = AST('stmts',
-          [ AST('sstmt',
-              [ AST('stmt',
-                  [ AST('passstmt', [])])])])
+           [AST('sstmt',
+                [AST('stmt',
+                     [AST('passstmt', [])])])])
 
 ASSIGN_DOC_STRING = lambda doc_string: \
-	AST('stmt',
-	    [ AST('assign',
-		  [ AST('expr', [ Token('LOAD_CONST', pattr=doc_string) ]),
-		    AST('designator', [ Token('STORE_NAME', pattr='__doc__')])
-		    ])])
+                    AST('stmt',
+                        [AST('assign',
+                             [AST('expr', [Token('LOAD_CONST',
+                                                 pattr=doc_string)]),
+                              AST('designator', [Token('STORE_NAME',
+                                                       pattr='__doc__')])])])
 
 BUILD_TUPLE_0 = AST('expr',
-                    [ AST('build_list',
-                          [ Token('BUILD_TUPLE_0') ])])
+                    [AST('build_list',
+                         [Token('BUILD_TUPLE_0')])])
 
 NAME_MODULE = AST('stmt',
-                [ AST('assign',
-                    [ AST('expr', [Token('LOAD_NAME', pattr='__name__')]),
-                      AST('designator', [ Token('STORE_NAME', pattr='__module__')])
-                      ])])
+                  [AST('assign',
+                       [AST('expr', [Token('LOAD_NAME', pattr='__name__')]),
+                        AST('designator', [Token('STORE_NAME',
+                                                 pattr='__module__')])])])
 
-#TAB = '\t'			# as God intended
-TAB = ' ' *4   # is less spacy than "\t"
-INDENT_PER_LEVEL = ' ' # additional intent per pretty-print level
+#TAB = '\t'                     # as God intended
+TAB = ' ' * 4   # is less spacy than "\t"
+INDENT_PER_LEVEL = ' '  # additional intent per pretty-print level
 
 TABLE_R = {
-    'POP_TOP':		( '%|%c\n', 0 ),
-    'STORE_ATTR':	( '%c.%[1]{pattr}', 0),
-#   'STORE_SUBSCR':	( '%c[%c]', 0, 1 ),
-    'STORE_SLICE+0':	( '%c[:]', 0 ),
-    'STORE_SLICE+1':	( '%c[%p:]', 0, (1,100) ),
-    'STORE_SLICE+2':	( '%c[:%p]', 0, (1,100) ),
-    'STORE_SLICE+3':	( '%c[%p:%p]', 0, (1,100), (2,100) ),
-    'DELETE_SLICE+0':	( '%|del %c[:]\n', 0 ),
-    'DELETE_SLICE+1':	( '%|del %c[%c:]\n', 0, 1 ),
-    'DELETE_SLICE+2':	( '%|del %c[:%c]\n', 0, 1 ),
-    'DELETE_SLICE+3':	( '%|del %c[%c:%c]\n', 0, 1, 2 ),
-    'DELETE_ATTR':	( '%|del %c.%[-1]{pattr}\n', 0 ),
-#   'EXEC_STMT':	( '%|exec %c in %[1]C\n', 0, (0,sys.maxint,', ') ),
+    'POP_TOP':          ('%|%c\n', 0),
+    'STORE_ATTR':       ('%c.%[1]{pattr}', 0),
+    #   'STORE_SUBSCR':     ('%c[%c]', 0, 1 ),
+    'STORE_SLICE+0':    ('%c[:]', 0),
+    'STORE_SLICE+1':    ('%c[%p:]', 0, (1, 100)),
+    'STORE_SLICE+2':    ('%c[:%p]', 0, (1, 100)),
+    'STORE_SLICE+3':    ('%c[%p:%p]', 0, (1, 100), (2, 100)),
+    'DELETE_SLICE+0':   ('%|del %c[:]\n', 0),
+    'DELETE_SLICE+1':   ('%|del %c[%c:]\n', 0, 1),
+    'DELETE_SLICE+2':   ('%|del %c[:%c]\n', 0, 1),
+    'DELETE_SLICE+3':   ('%|del %c[%c:%c]\n', 0, 1, 2),
+    'DELETE_ATTR':      ('%|del %c.%[-1]{pattr}\n', 0),
+    #   'EXEC_STMT':        ('%|exec %c in %[1]C\n', 0, (0,sys.maxint,', ') ),
 }
 TABLE_R0 = {
-#    'BUILD_LIST':	( '[%C]',      (0,-1,', ') ),
-#    'BUILD_TUPLE':	( '(%C)',      (0,-1,', ') ),
-#    'CALL_FUNCTION':	( '%c(%C)', 0, (1,-1,', ') ),
+    #    'BUILD_LIST':      ('[%C]',      (0,-1,', ') ),
+    #    'BUILD_TUPLE':     ('(%C)',      (0,-1,', ') ),
+    #    'CALL_FUNCTION':   ('%c(%C)', 0, (1,-1,', ') ),
 }
 TABLE_DIRECT = {
-    'BINARY_ADD':	( '+' ,),
-    'BINARY_SUBTRACT':	( '-' ,),
-    'BINARY_MULTIPLY':	( '*' ,),
-    'BINARY_DIVIDE':	( '/' ,),
-    'BINARY_TRUE_DIVIDE':	( '/' ,),
-    'BINARY_FLOOR_DIVIDE':	( '//' ,),
-    'BINARY_MODULO':	( '%%',),
-    'BINARY_POWER':	( '**',),
-    'BINARY_LSHIFT':	( '<<',),
-    'BINARY_RSHIFT':	( '>>',),
-    'BINARY_AND':	( '&' ,),
-    'BINARY_OR':	( '|' ,),
-    'BINARY_XOR':	( '^' ,),
-    'INPLACE_ADD':	( '+=' ,),
-    'INPLACE_SUBTRACT':	( '-=' ,),
-    'INPLACE_MULTIPLY':	( '*=' ,),
-    'INPLACE_DIVIDE':	( '/=' ,),
-    'INPLACE_TRUE_DIVIDE':	( '/=' ,),
-    'INPLACE_FLOOR_DIVIDE':	( '//=' ,),
-    'INPLACE_MODULO':	( '%%=',),
-    'INPLACE_POWER':	( '**=',),
-    'INPLACE_LSHIFT':	( '<<=',),
-    'INPLACE_RSHIFT':	( '>>=',),
-    'INPLACE_AND':	( '&=' ,),
-    'INPLACE_OR':	( '|=' ,),
-    'INPLACE_XOR':	( '^=' ,),
-    'binary_expr':	( '%c %c %c', 0, -1, 1 ),
+    'BINARY_ADD': ('+',),
+    'BINARY_SUBTRACT': ('-',),
+    'BINARY_MULTIPLY': ('*',),
+    'BINARY_DIVIDE': ('/',),
+    'BINARY_TRUE_DIVIDE': ('/',),
+    'BINARY_FLOOR_DIVIDE': ('//',),
+    'BINARY_MODULO': ('%%',),
+    'BINARY_POWER': ('**',),
+    'BINARY_LSHIFT': ('<<',),
+    'BINARY_RSHIFT': ('>>',),
+    'BINARY_AND': ('&',),
+    'BINARY_OR': ('|',),
+    'BINARY_XOR': ('^',),
+    'INPLACE_ADD': ('+=',),
+    'INPLACE_SUBTRACT': ('-=',),
+    'INPLACE_MULTIPLY': ('*=',),
+    'INPLACE_DIVIDE': ('/=',),
+    'INPLACE_TRUE_DIVIDE': ('/=',),
+    'INPLACE_FLOOR_DIVIDE': ('//=',),
+    'INPLACE_MODULO': ('%%=',),
+    'INPLACE_POWER': ('**=',),
+    'INPLACE_LSHIFT': ('<<=',),
+    'INPLACE_RSHIFT': ('>>=',),
+    'INPLACE_AND': ('&=',),
+    'INPLACE_OR': ('|=',),
+    'INPLACE_XOR': ('^=',),
+    'binary_expr': ('%c %c %c', 0, -1, 1),
 
-    'UNARY_POSITIVE':	( '+',),
-    'UNARY_NEGATIVE':	( '-',),
-    'UNARY_INVERT':	( '~%c'),
-    'unary_expr':   ( '%c%c', 1, 0),
+    'UNARY_POSITIVE': ('+',),
+    'UNARY_NEGATIVE': ('-',),
+    'UNARY_INVERT': ('~%c'),
+    'unary_expr': ('%c%c', 1, 0),
 
-    'unary_not':	( 'not %c', 0 ),
-    'unary_convert':	( '`%c`', 0 ),
-    'get_iter':	( 'iter(%c)', 0 ),
-    'slice0':		( '%c[:]', 0 ),
-    'slice1':		( '%c[%p:]', 0, (1,100) ),
-    'slice2':		( '%c[:%p]', 0, (1,100) ),
-    'slice3':		( '%c[%p:%p]', 0, (1,100), (2,100) ),
+    'unary_not': ('not %c', 0),
+    'unary_convert': ('`%c`', 0),
+    'get_iter': ('iter(%c)', 0),
+    'slice0': ('%c[:]', 0),
+    'slice1': ('%c[%p:]', 0, (1, 100)),
+    'slice2': ('%c[:%p]', 0, (1, 100)),
+    'slice3': ('%c[%p:%p]', 0, (1, 100), (2, 100)),
 
-    'IMPORT_FROM':	( '%{pattr}', ),
-    'load_attr':	( '%c.%[1]{pattr}', 0),
-    'LOAD_FAST':	( '%{pattr}', ),
-    'LOAD_NAME':	( '%{pattr}', ),
-    'LOAD_GLOBAL':	( '%{pattr}', ),
-    'LOAD_DEREF':	( '%{pattr}', ),
-    'LOAD_LOCALS':	( 'locals()', ),
-    'LOAD_ASSERT':  ( '%{pattr}', ),
-#   'LOAD_CONST':	( '%{pattr}', ),	# handled by n_LOAD_CONST
-    'DELETE_FAST':	( '%|del %{pattr}\n', ),
-    'DELETE_NAME':	( '%|del %{pattr}\n', ),
-    'DELETE_GLOBAL':	( '%|del %{pattr}\n', ),
-    'delete_subscr':	( '%|del %c[%c]\n', 0, 1,),
-    'binary_subscr':	( '%c[%p]', 0, (1,100)),
-    'binary_subscr2':	( '%c[%p]', 0, (1,100)),
-    'store_subscr':	( '%c[%c]', 0, 1),
-    'STORE_FAST':	( '%{pattr}', ),
-    'STORE_NAME':	( '%{pattr}', ),
-    'STORE_GLOBAL':	( '%{pattr}', ),
-    'STORE_DEREF':	( '%{pattr}', ),
-    'unpack':		( '%C%,', (1, sys.maxsize, ', ') ),
-    'unpack_w_parens':		( '(%C%,)', (1, sys.maxsize, ', ') ),
-    'unpack_list':	( '[%C]', (1, sys.maxsize, ', ') ),
-    'build_tuple2':	( '%P', (0,-1,', ', 100) ),
+    'IMPORT_FROM': ('%{pattr}', ),
+    'load_attr': ('%c.%[1]{pattr}', 0),
+    'LOAD_FAST': ('%{pattr}', ),
+    'LOAD_NAME': ('%{pattr}', ),
+    'LOAD_GLOBAL': ('%{pattr}', ),
+    'LOAD_DEREF': ('%{pattr}', ),
+    'LOAD_LOCALS': ('locals()', ),
+    'LOAD_ASSERT': ('%{pattr}', ),
+    #   'LOAD_CONST':       ('%{pattr}', ),        # handled by n_LOAD_CONST
+    'DELETE_FAST': ('%|del %{pattr}\n', ),
+    'DELETE_NAME': ('%|del %{pattr}\n', ),
+    'DELETE_GLOBAL': ('%|del %{pattr}\n', ),
+    'delete_subscr': ('%|del %c[%c]\n', 0, 1,),
+    'binary_subscr': ('%c[%p]', 0, (1, 100)),
+    'binary_subscr2': ('%c[%p]', 0, (1, 100)),
+    'store_subscr': ('%c[%c]', 0, 1),
+    'STORE_FAST': ('%{pattr}', ),
+    'STORE_NAME': ('%{pattr}', ),
+    'STORE_GLOBAL': ('%{pattr}', ),
+    'STORE_DEREF': ('%{pattr}', ),
+    'unpack': ('%C%,', (1, sys.maxsize, ', ')),
+    'unpack_w_parens': ('(%C%,)', (1, sys.maxsize, ', ')),
+    'unpack_list': ('[%C]', (1, sys.maxsize, ', ')),
+    'build_tuple2': ('%P', (0, -1, ', ', 100)),
 
-    #'list_compr':	( '[ %c ]', -2),	# handled by n_list_compr
-    'list_iter':	( '%c', 0),
-    'list_for':		( ' for %c in %c%c', 2, 0, 3 ),
-    'list_if':		( ' if %c%c', 0, 2 ),
-    'list_if_not':		( ' if not %p%c', (0,22), 2 ),
-    'lc_body':		( '', ),	# ignore when recusing
+    #'list_compr': ('[ %c ]', -2),        # handled by n_list_compr
+    'list_iter': ('%c', 0),
+    'list_for': (' for %c in %c%c', 2, 0, 3),
+    'list_if': (' if %c%c', 0, 2),
+    'list_if_not': (' if not %p%c', (0, 22), 2),
+    'lc_body': ('',),        # ignore when recusing
 
-    'comp_iter':	( '%c', 0),
-    'comp_for':		( ' for %c in %c%c', 2, 0, 3 ),
-    'comp_if':		( ' if %c%c', 0, 2 ),
-    'comp_ifnot':	( ' if not %p%c', (0,22), 2 ),
-    'comp_body':	( '', ),	# ignore when recusing
-    'set_comp_body':    ( '%c', 0 ),
-    'gen_comp_body':    ( '%c', 0 ),
-    'dict_comp_body':   ( '%c:%c', 1, 0 ),
+    'comp_iter': ('%c', 0),
+    'comp_for': (' for %c in %c%c', 2, 0, 3),
+    'comp_if': (' if %c%c', 0, 2),
+    'comp_ifnot': (' if not %p%c', (0, 22), 2),
+    'comp_body': ('',),        # ignore when recusing
+    'set_comp_body': ('%c', 0),
+    'gen_comp_body': ('%c', 0),
+    'dict_comp_body': ('%c:%c', 1, 0),
 
-    'assign':		( '%|%c = %p\n', -1, (0,200) ),
-    'augassign1':	( '%|%c %c %c\n', 0, 2, 1),
-    'augassign2':	( '%|%c.%[2]{pattr} %c %c\n', 0, -3, -4),
-#   'dup_topx':		( '%c', 0),
-    'designList':	( '%c = %c', 0, -1 ),
-    'and':          	( '%c and %c', 0, 2 ),
-    'ret_and':        	( '%c and %c', 0, 2 ),
-    'and2':          	( '%c', 3 ),
-    'or':           	( '%c or %c', 0, 2 ),
-    'ret_or':           	( '%c or %c', 0, 2 ),
-    'conditional':  ( '%p if %p else %p', (2,27), (0,27), (4,27)),
-    'ret_cond':     ( '%p if %p else %p', (2,27), (0,27), (4,27)),
-    'conditionalnot':  ( '%p if not %p else %p', (2,27), (0,22), (4,27)),
-    'ret_cond_not':  ( '%p if not %p else %p', (2,27), (0,22), (4,27)),
-    'conditional_lambda':  ( '(%c if %c else %c)', 2, 0, 3),
-    'return_lambda':    ('%c', 0),
-    'compare':		( '%p %[-1]{pattr} %p', (0,19), (1,19) ),
-    'cmp_list':		( '%p %p', (0,20), (1,19)),
-    'cmp_list1':	( '%[3]{pattr} %p %p', (0,19), (-2,19)),
-    'cmp_list2':	( '%[1]{pattr} %p', (0,19)),
-#   'classdef': 	(), # handled by n_classdef()
-    'funcdef':  	( '\n\n%|def %c\n', -2), # -2 to handle closures
-    'funcdefdeco':  	( '\n\n%c', 0),
-    'mkfuncdeco':  	( '%|@%c\n%c', 0, 1),
-    'mkfuncdeco0':  	( '%|def %c\n', 0),
-    'classdefdeco':  	( '%c', 0),
-    'classdefdeco1':  	( '\n\n%|@%c%c', 0, 1),
-    'kwarg':    	( '%[0]{pattr}=%c', 1),
-    'importlist2':	( '%C', (0, sys.maxsize, ', ') ),
+    'assign': ('%|%c = %p\n', -1, (0, 200)),
+    'augassign1': ('%|%c %c %c\n', 0, 2, 1),
+    'augassign2': ('%|%c.%[2]{pattr} %c %c\n', 0, -3, -4),
+    #   'dup_topx': ('%c', 0),
+    'designList': ('%c = %c', 0, -1),
+    'and': ('%c and %c', 0, 2),
+    'ret_and': ('%c and %c', 0, 2),
+    'and2': ('%c', 3),
+    'or': ('%c or %c', 0, 2),
+    'ret_or': ('%c or %c', 0, 2),
+    'conditional': ('%p if %p else %p', (2, 27), (0, 27), (4, 27)),
+    'ret_cond': ('%p if %p else %p', (2, 27), (0, 27), (4, 27)),
+    'conditionalnot': ('%p if not %p else %p', (2, 27), (0, 22), (4, 27)),
+    'ret_cond_not': ('%p if not %p else %p', (2, 27), (0, 22), (4, 27)),
+    'conditional_lambda': ('(%c if %c else %c)', 2, 0, 3),
+    'return_lambda': ('%c', 0),
+    'compare': ('%p %[-1]{pattr} %p', (0, 19), (1, 19)),
+    'cmp_list': ('%p %p', (0, 20), (1, 19)),
+    'cmp_list1': ('%[3]{pattr} %p %p', (0, 19), (-2, 19)),
+    'cmp_list2': ('%[1]{pattr} %p', (0, 19)),
+    #   'classdef': (), # handled by n_classdef()
+    'funcdef': ('\n\n%|def %c\n', -2),  # -2 to handle closures
+    'funcdefdeco': ('\n\n%c', 0),
+    'mkfuncdeco': ('%|@%c\n%c', 0, 1),
+    'mkfuncdeco0': ('%|def %c\n', 0),
+    'classdefdeco': ('%c', 0),
+    'classdefdeco1': ('\n\n%|@%c%c', 0, 1),
+    'kwarg': ('%[0]{pattr}=%c', 1),
+    'importlist2': ('%C', (0, sys.maxsize, ', ')),
 
-    'assert':		( '%|assert %c\n' , 0 ),
-    'assert2':		( '%|assert %c, %c\n' , 0, 3 ),
-    'assert_expr_or': ( '%c or %c', 0, 2 ),
-    'assert_expr_and':    ( '%c and %c', 0, 2 ),
-    'print_items_stmt': ( '%|print %c%c,\n', 0, 2),
-    'print_items_nl_stmt': ( '%|print %c%c\n', 0, 2),
-    'print_item':  ( ', %c', 0),
-    'print_nl':	( '%|print\n', ),
-    'print_to':		( '%|print >> %c, %c,\n', 0, 1 ),
-    'print_to_nl':	( '%|print >> %c, %c\n', 0, 1 ),
-    'print_nl_to':	( '%|print >> %c\n', 0 ),
-    'print_to_items':	( '%C', (0, 2, ', ') ),
+    'assert': ('%|assert %c\n', 0),
+    'assert2': ('%|assert %c, %c\n', 0, 3),
+    'assert_expr_or': ('%c or %c', 0, 2),
+    'assert_expr_and': ('%c and %c', 0, 2),
+    'print_items_stmt': ('%|print %c%c,\n', 0, 2),
+    'print_items_nl_stmt': ('%|print %c%c\n', 0, 2),
+    'print_item': (', %c', 0),
+    'print_nl': ('%|print\n', ),
+    'print_to': ('%|print >> %c, %c,\n', 0, 1),
+    'print_to_nl': ('%|print >> %c, %c\n', 0, 1),
+    'print_nl_to': ('%|print >> %c\n', 0),
+    'print_to_items': ('%C', (0, 2, ', ')),
 
-    'call_stmt':	( '%|%p\n', (0,200)),
-    'break_stmt':	( '%|break\n', ),
-    'continue_stmt':	( '%|continue\n', ),
+    'call_stmt': ('%|%p\n', (0, 200)),
+    'break_stmt': ('%|break\n',),
+    'continue_stmt': ('%|continue\n',),
 
-    'raise_stmt0':	( '%|raise\n', ),
-    'raise_stmt1':	( '%|raise %c\n', 0),
-    'raise_stmt2':	( '%|raise %c, %c\n', 0, 1),
-    'raise_stmt3':	( '%|raise %c, %c, %c\n', 0, 1, 2),
-#    'yield':	( 'yield %c', 0),
-#    'return_stmt':	( '%|return %c\n', 0),
+    'raise_stmt0': ('%|raise\n',),
+    'raise_stmt1': ('%|raise %c\n', 0),
+    'raise_stmt2': ('%|raise %c, %c\n', 0, 1),
+    'raise_stmt3': ('%|raise %c, %c, %c\n', 0, 1, 2),
+    #    'yield': ('yield %c', 0),
+    #    'return_stmt': ('%|return %c\n', 0),
 
-    'ifstmt':		( '%|if %c:\n%+%c%-', 0, 1 ),
-    'iflaststmt':		( '%|if %c:\n%+%c%-', 0, 1 ),
-    'iflaststmtl':		( '%|if %c:\n%+%c%-', 0, 1 ),
-    'testtrue':     ( 'not %p', (0,22) ),
+    'ifstmt': ('%|if %c:\n%+%c%-', 0, 1),
+    'iflaststmt': ('%|if %c:\n%+%c%-', 0, 1),
+    'iflaststmtl': ('%|if %c:\n%+%c%-', 0, 1),
+    'testtrue': ('not %p', (0, 22)),
 
-    'ifelsestmt':	( '%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3 ),
-    'ifelsestmtc':	( '%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3 ),
-    'ifelsestmtl':	( '%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3 ),
-    'ifelifstmt':	( '%|if %c:\n%+%c%-%c', 0, 1, 3 ),
-    'elifelifstmt':	( '%|elif %c:\n%+%c%-%c', 0, 1, 3 ),
-    'elifstmt':		( '%|elif %c:\n%+%c%-', 0, 1 ),
-    'elifelsestmt':	( '%|elif %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3 ),
-    'ifelsestmtr':	( '%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 2 ),
-    'elifelsestmtr':	( '%|elif %c:\n%+%c%-%|else:\n%+%c%-\n\n', 0, 1, 2 ),
+    'ifelsestmt': ('%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3),
+    'ifelsestmtc': ('%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3),
+    'ifelsestmtl': ('%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3),
+    'ifelifstmt': ('%|if %c:\n%+%c%-%c', 0, 1, 3),
+    'elifelifstmt': ('%|elif %c:\n%+%c%-%c', 0, 1, 3),
+    'elifstmt': ('%|elif %c:\n%+%c%-', 0, 1),
+    'elifelsestmt': ('%|elif %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 3),
+    'ifelsestmtr': ('%|if %c:\n%+%c%-%|else:\n%+%c%-', 0, 1, 2),
+    'elifelsestmtr': ('%|elif %c:\n%+%c%-%|else:\n%+%c%-\n\n', 0, 1, 2),
 
-    'whilestmt':	( '%|while %c:\n%+%c%-\n\n', 1, 2 ),
-    'while1stmt':	( '%|while 1:\n%+%c%-\n\n', 1 ),
-    'while1elsestmt':	( '%|while 1:\n%+%c%-%|else:\n%+%c%-\n\n', 1, 3 ),
-    'whileelsestmt':	( '%|while %c:\n%+%c%-%|else:\n%+%c%-\n\n', 1, 2, -2 ),
-    'whileelselaststmt':	( '%|while %c:\n%+%c%-%|else:\n%+%c%-', 1, 2, -2 ),
-    'forstmt':		( '%|for %c in %c:\n%+%c%-\n\n', 3, 1, 4 ),
-    'forelsestmt':	(
+    'whilestmt': ('%|while %c:\n%+%c%-\n\n', 1, 2),
+    'while1stmt': ('%|while 1:\n%+%c%-\n\n', 1),
+    'while1elsestmt': ('%|while 1:\n%+%c%-%|else:\n%+%c%-\n\n', 1, 3),
+    'whileelsestmt': ('%|while %c:\n%+%c%-%|else:\n%+%c%-\n\n', 1, 2, -2),
+    'whileelselaststmt': ('%|while %c:\n%+%c%-%|else:\n%+%c%-', 1, 2, -2),
+    'forstmt': ('%|for %c in %c:\n%+%c%-\n\n', 3, 1, 4),
+    'forelsestmt': (
         '%|for %c in %c:\n%+%c%-%|else:\n%+%c%-\n\n', 3, 1, 4, -2),
-    'forelselaststmt':	(
+    'forelselaststmt': (
         '%|for %c in %c:\n%+%c%-%|else:\n%+%c%-', 3, 1, 4, -2),
-    'forelselaststmtl':	(
+    'forelselaststmtl': (
         '%|for %c in %c:\n%+%c%-%|else:\n%+%c%-\n\n', 3, 1, 4, -2),
-    'trystmt':		( '%|try:\n%+%c%-%c\n\n', 1, 3 ),
-    'tryelsestmt':		( '%|try:\n%+%c%-%c%|else:\n%+%c%-\n\n', 1, 3, 4 ),
-    'tryelsestmtc':		( '%|try:\n%+%c%-%c%|else:\n%+%c%-', 1, 3, 4 ),
-    'tryelsestmtl':		( '%|try:\n%+%c%-%c%|else:\n%+%c%-', 1, 3, 4 ),
-    'tf_trystmt':		( '%c%-%c%+', 1, 3 ),
-    'tf_tryelsestmt':		( '%c%-%c%|else:\n%+%c', 1, 3, 4 ),
-    'except':		( '%|except:\n%+%c%-', 3 ),
-    'except_cond1':	( '%|except %c:\n', 1 ),
-    'except_cond2':	( '%|except %c as %c:\n', 1, 5 ),
-    'except_suite':     ( '%+%c%-%C', 0, (1, sys.maxsize, '') ),
-    'tryfinallystmt':	( '%|try:\n%+%c%-%|finally:\n%+%c%-\n\n', 1, 5 ),
-    'withstmt':     ( '%|with %c:\n%+%c%-', 0, 3),
-    'withasstmt':   ( '%|with %c as %c:\n%+%c%-', 0, 2, 3),
-    'passstmt':		( '%|pass\n', ),
-    'STORE_FAST':	( '%{pattr}', ),
-    'kv':		( '%c: %c', 3, 1 ),
-    'kv2':		( '%c: %c', 1, 2 ),
-    'mapexpr':		( '{%[1]C}', (0,sys.maxsize,', ') ),
+    'trystmt': ('%|try:\n%+%c%-%c\n\n', 1, 3),
+    'tryelsestmt': ('%|try:\n%+%c%-%c%|else:\n%+%c%-\n\n', 1, 3, 4),
+    'tryelsestmtc': ('%|try:\n%+%c%-%c%|else:\n%+%c%-', 1, 3, 4),
+    'tryelsestmtl': ('%|try:\n%+%c%-%c%|else:\n%+%c%-', 1, 3, 4),
+    'tf_trystmt': ('%c%-%c%+', 1, 3),
+    'tf_tryelsestmt': ('%c%-%c%|else:\n%+%c', 1, 3, 4),
+    'except': ('%|except:\n%+%c%-', 3),
+    'except_cond1': ('%|except %c:\n', 1),
+    'except_cond2': ('%|except %c as %c:\n', 1, 5),
+    'except_suite': ('%+%c%-%C', 0, (1, sys.maxsize, '')),
+    'tryfinallystmt': ('%|try:\n%+%c%-%|finally:\n%+%c%-\n\n', 1, 5),
+    'withstmt': ('%|with %c:\n%+%c%-', 0, 3),
+    'withasstmt': ('%|with %c as %c:\n%+%c%-', 0, 2, 3),
+    'passstmt': ('%|pass\n',),
+    'STORE_FAST': ('%{pattr}',),
+    'kv': ('%c: %c', 3, 1),
+    'kv2': ('%c: %c', 1, 2),
+    'mapexpr': ('{%[1]C}', (0, sys.maxsize, ', ')),
 
     ##
     ## Python 2.5 Additions
     ##
 
     # Import style for 2.5
-    'importstmt': ( '%|import %c\n', 2),
-    'importstar': ( '%|from %[2]{pattr} import *\n', ),
-    'importfrom': ( '%|from %[2]{pattr} import %c\n', 3 ),
-    'importmultiple': ( '%|import %c%c\n', 2, 3),
-    'import_cont'   : ( ', %c', 2),
+    'importstmt': ('%|import %c\n', 2),
+    'importstar': ('%|from %[2]{pattr} import *\n',),
+    'importfrom': ('%|from %[2]{pattr} import %c\n', 3),
+    'importmultiple': ('%|import %c%c\n', 2, 3),
+    'import_cont': (', %c', 2),
 
     # CE - Fixes for tuples
-    'assign2':     ( '%|%c, %c = %c, %c\n', 3, 4, 0, 1 ),
-    'assign3':     ( '%|%c, %c, %c = %c, %c, %c\n', 5, 6, 7, 0, 1, 2 ),
-
+    'assign2': ('%|%c, %c = %c, %c\n', 3, 4, 0, 1),
+    'assign3': ('%|%c, %c, %c = %c, %c, %c\n', 5, 6, 7, 0, 1, 2),
 }
 
 
@@ -320,93 +327,96 @@ MAP_R0 = (TABLE_R0, -1, 0)
 MAP_R = (TABLE_R, -1)
 
 MAP = {
-    'stmt':		MAP_R,
-    'call_function':		MAP_R,
-    'del_stmt':		MAP_R,
-    'designator':	MAP_R,
-    'exprlist':		MAP_R0,
+    'stmt':             MAP_R,
+    'call_function':            MAP_R,
+    'del_stmt':         MAP_R,
+    'designator':       MAP_R,
+    'exprlist':         MAP_R0,
 }
 
 PRECEDENCE = {
-    'build_list':           0,
-    'mapexpr':              0,
-    'unary_convert':        0,
-    'dictcomp':             0,
-    'setcomp':              0,
-    'list_compr':           0,
-    'genexpr':              0,
+    'build_list': 0,
+    'mapexpr': 0,
+    'unary_convert': 0,
+    'dictcomp': 0,
+    'setcomp': 0,
+    'list_compr': 0,
+    'genexpr': 0,
 
-    'load_attr':            2,
-    'binary_subscr':        2,
-    'binary_subscr2':       2,
-    'slice0':               2,
-    'slice1':               2,
-    'slice2':               2,
-    'slice3':               2,
-    'buildslice2':          2,
-    'buildslice3':          2,
-    'call_function':        2,
+    'load_attr': 2,
+    'binary_subscr': 2,
+    'binary_subscr2': 2,
+    'slice0': 2,
+    'slice1': 2,
+    'slice2': 2,
+    'slice3': 2,
+    'buildslice2': 2,
+    'buildslice3': 2,
+    'call_function': 2,
 
-    'BINARY_POWER':         4,
+    'BINARY_POWER': 4,
 
-    'unary_expr':           6,
+    'unary_expr': 6,
 
-    'BINARY_MULTIPLY':      8,
-    'BINARY_DIVIDE':        8,
-    'BINARY_TRUE_DIVIDE':   8,
-    'BINARY_FLOOR_DIVIDE':  8,
-    'BINARY_MODULO':        8,
+    'BINARY_MULTIPLY': 8,
+    'BINARY_DIVIDE': 8,
+    'BINARY_TRUE_DIVIDE': 8,
+    'BINARY_FLOOR_DIVIDE': 8,
+    'BINARY_MODULO': 8,
 
-    'BINARY_ADD':           10,
-    'BINARY_SUBTRACT':      10,
+    'BINARY_ADD': 10,
+    'BINARY_SUBTRACT': 10,
 
-    'BINARY_LSHIFT':        12,
-    'BINARY_RSHIFT':        12,
+    'BINARY_LSHIFT': 12,
+    'BINARY_RSHIFT': 12,
 
-    'BINARY_AND':           14,
+    'BINARY_AND': 14,
 
-    'BINARY_XOR':           16,
+    'BINARY_XOR': 16,
 
-    'BINARY_OR':            18,
+    'BINARY_OR': 18,
 
-    'cmp':                  20,
+    'cmp': 20,
 
-    'unary_not':            22,
+    'unary_not': 22,
 
-    'and':                  24,
-    'ret_and':              24,
+    'and': 24,
+    'ret_and': 24,
 
-    'or':                   26,
-    'ret_or':               26,
+    'or': 26,
+    'ret_or': 26,
 
-    'conditional':          28,
-    'conditionalnot':       28,
-    'ret_cond':             28,
-    'ret_cond_not':         28,
+    'conditional': 28,
+    'conditionalnot': 28,
+    'ret_cond': 28,
+    'ret_cond_not': 28,
 
-    '_mklambda':            30,
-    'yield':                101
+    '_mklambda': 30,
+    'yield': 101
 }
 
-ASSIGN_TUPLE_PARAM = lambda param_name: \
-             AST('expr', [ Token('LOAD_FAST', pattr=param_name) ])
+ASSIGN_TUPLE_PARAM = lambda param_name: AST('expr',
+                                            [Token('LOAD_FAST',
+                                                   pattr=param_name)])
 
 escape = re.compile(r'''
             (?P<prefix> [^%]* )
-            % ( \[ (?P<child> -? \d+ ) \] )?
+            % (\[ (?P<child> -? \d+ ) \] )?
                 ((?P<type> [^{] ) |
-                 ( [{] (?P<expr> [^}]* ) [}] ))
+                 ([{] (?P<expr> [^}]* ) [}] ))
         ''', re.VERBOSE)
+
 
 class ParserError(Parser.ParserError):
     def __init__(self, error, tokens):
-        self.error = error # previous exception
+        # FIXME: Should we use PEP 3134 __cause__ or __context__?
+        self.error = error  # previous exception
         self.tokens = tokens
 
     def __str__(self):
         lines = ['--- This code section failed: ---']
-        lines.extend( map(str, self.tokens) )
-        lines.extend( ['', str(self.error)] )
+        lines.extend(map(str, self.tokens))
+        lines.extend(['', str(self.error)])
         return '\n'.join(lines)
 
 
@@ -419,6 +429,7 @@ def find_globals(node, globs):
             globs.add(n.pattr)
     return globs
 
+
 def find_all_globals(node, globs):
     """Find globals in this statement."""
     for n in node:
@@ -428,15 +439,17 @@ def find_all_globals(node, globs):
             globs.add(n.pattr)
     return globs
 
+
 def find_none(node):
     for n in node:
         if isinstance(n, AST):
             if not (n == 'return_stmt' or n == 'return_if_stmt'):
                 if find_none(n):
                     return True
-        elif n.type == 'LOAD_CONST' and n.pattr == None:
+        elif n.type == 'LOAD_CONST' and n.pattr is None:
             return True
     return False
+
 
 class Walker(GenericASTTraversal, object):
     stacked_params = ('f', 'indent', 'isLambda', '_globals')
@@ -464,28 +477,30 @@ class Walker(GenericASTTraversal, object):
                  None)
 
     indent = property(lambda s: s.__params['indent'],
-                 lambda s, x: s.__params.__setitem__('indent', x),
-                 lambda s: s.__params.__delitem__('indent'),
-                 None)
+                      lambda s, x: s.__params.__setitem__('indent', x),
+                      lambda s: s.__params.__delitem__('indent'),
+                      None)
 
     isLambda = property(lambda s: s.__params['isLambda'],
-                 lambda s, x: s.__params.__setitem__('isLambda', x),
-                 lambda s: s.__params.__delitem__('isLambda'),
-                 None)
+                        lambda s, x: s.__params.__setitem__('isLambda', x),
+                        lambda s: s.__params.__delitem__('isLambda'),
+                        None)
 
     _globals = property(lambda s: s.__params['_globals'],
-                 lambda s, x: s.__params.__setitem__('_globals', x),
-                 lambda s: s.__params.__delitem__('_globals'),
-                 None)
+                        lambda s, x: s.__params.__setitem__('_globals', x),
+                        lambda s: s.__params.__delitem__('_globals'),
+                        None)
 
     def indentMore(self, indent=TAB):
         self.indent += indent
+
     def indentLess(self, indent=TAB):
         self.indent = self.indent[:-len(indent)]
 
     def traverse(self, node, indent=None, isLambda=0):
         self.__param_stack.append(self.__params)
-        if indent is None: indent = self.indent
+        if indent is None:
+            indent = self.indent
         p = self.pending_newlines
         self.pending_newlines = 0
         self.__params = {
@@ -535,15 +550,16 @@ class Walker(GenericASTTraversal, object):
         self.f.write(out)
 
     def print_(self, *data):
-        if data and not(len(data) == 1 and data[0] ==''):
+        if data and not(len(data) == 1 and data[0] == ''):
             self.write(*data)
         self.pending_newlines = max(self.pending_newlines, 1)
 
     def print_docstring(self, indent, docstring):
+        from xoutil.six import text_type
         quote = '"""'
         self.write(indent)
         # TODO: Verify
-        if type(docstring) == unicode_:
+        if type(docstring) == text_type:
             self.write('u')
             docstring = repr(docstring.expandtabs())[2:-1]
         else:
@@ -596,7 +612,7 @@ class Walker(GenericASTTraversal, object):
         else:
             self.print_(trimmed[0])
             for line in trimmed[1:-1]:
-                self.print_( indent, line )
+                self.print_(indent, line )
             self.print_(indent, trimmed[-1],quote)
 
 
@@ -706,7 +722,7 @@ class Walker(GenericASTTraversal, object):
             # would result in 'LOAD_CONST; UNARY_NEGATIVE'
             # change:hG/2002-02-07: this was done for all negative integers
             # todo: check whether this is necessary in Python 2.1
-            self.write( hex(data) )
+            self.write(hex(data) )
         elif datatype is EllipsisType:
             self.write('...')
         elif data is None:
@@ -732,7 +748,7 @@ class Walker(GenericASTTraversal, object):
 
     n_store_subscr = n_binary_subscr = n_delete_subscr
 
-#    'tryfinallystmt':	( '%|try:\n%+%c%-%|finally:\n%+%c%-', 1, 5 ),
+#    'tryfinallystmt':  ('%|try:\n%+%c%-%|finally:\n%+%c%-', 1, 5 ),
     def n_tryfinallystmt(self, node):
         if len(node[1][0]) == 1 and node[1][0][0] == 'stmt':
             if node[1][0][0][0] == 'trystmt':
@@ -901,14 +917,14 @@ class Walker(GenericASTTraversal, object):
         # find innerst node
         while n == 'list_iter':
             n = n[0] # recurse one step
-            if   n == 'list_for':	n = n[3]
-            elif n == 'list_if':	n = n[2]
+            if   n == 'list_for':       n = n[3]
+            elif n == 'list_if':        n = n[2]
             elif n == 'list_if_not': n= n[2]
         assert n == 'lc_body'
-        self.write( '[ ');
+        self.write('[ ');
         self.preorder(n[0]) # lc_body
         self.preorder(node[-1]) # for/if parts
-        self.write( ' ]')
+        self.write(' ]')
         self.prec = p
         self.prune() # stop recursing
 
@@ -930,8 +946,8 @@ class Walker(GenericASTTraversal, object):
         # find innerst node
         while n == 'comp_iter':
             n = n[0] # recurse one step
-            if   n == 'comp_for':	n = n[3]
-            elif n == 'comp_if':	n = n[2]
+            if   n == 'comp_for':       n = n[3]
+            elif n == 'comp_if':        n = n[2]
             elif n == 'comp_ifnot': n = n[2]
         assert n == 'comp_body', ast
 
@@ -1124,10 +1140,10 @@ class Walker(GenericASTTraversal, object):
                 print(node.__dict__)
                 raise
 
-            if   typ == '%':	self.write('%')
-            elif typ == '+':	self.indentMore()
-            elif typ == '-':	self.indentLess()
-            elif typ == '|':	self.write(self.indent)
+            if   typ == '%':    self.write('%')
+            elif typ == '+':    self.indentMore()
+            elif typ == '-':    self.indentLess()
+            elif typ == '|':    self.write(self.indent)
             ## no longer used, since BUILD_TUPLE_n is pretty printed:
             elif typ == ',':
                 if lastC == 1:
@@ -1195,7 +1211,7 @@ class Walker(GenericASTTraversal, object):
           if k in TABLE_R:
              continue
           op = k[ :k.rfind('_') ]
-          if op == 'CALL_FUNCTION':	TABLE_R[k] = ('%c(%P)', 0, (1,-1,', ',100))
+          if op == 'CALL_FUNCTION':     TABLE_R[k] = ('%c(%P)', 0, (1,-1,', ',100))
           elif op in ('CALL_FUNCTION_VAR',
                       'CALL_FUNCTION_VAR_KW', 'CALL_FUNCTION_KW'):
              if v == 0:
@@ -1216,10 +1232,10 @@ class Walker(GenericASTTraversal, object):
                 entry = (str, 0, p2, -3, -2)
              TABLE_R[k] = entry
           ## handled by n_mapexpr:
-          ##if op == 'BUILD_SLICE':	TABLE_R[k] = ('%C'    ,    (0,-1,':'))
+          ##if op == 'BUILD_SLICE':     TABLE_R[k] = ('%C'    ,    (0,-1,':'))
           ## handled by n_build_list:
-          ##if   op == 'BUILD_LIST':	TABLE_R[k] = ('[%C]'  ,    (0,-1,', '))
-          ##elif op == 'BUILD_TUPLE':	TABLE_R[k] = ('(%C%,)',    (0,-1,', '))
+          ##if   op == 'BUILD_LIST':    TABLE_R[k] = ('[%C]'  ,    (0,-1,', '))
+          ##elif op == 'BUILD_TUPLE':   TABLE_R[k] = ('(%C%,)',    (0,-1,', '))
 
     def get_tuple_parameter(self, ast, name):
        """
@@ -1274,7 +1290,7 @@ class Walker(GenericASTTraversal, object):
                     print(default)
                     print('--')
                 result = '%s = %s' % (name, self.traverse(default, indent='') )
-                if result[-2:] == '= ':	# default was 'LOAD_CONST None'
+                if result[-2:] == '= ': # default was 'LOAD_CONST None'
                     result += 'None'
                 return result
             else:
@@ -1299,7 +1315,7 @@ class Walker(GenericASTTraversal, object):
                                  isLambda = isLambda,
                                  noneInNames = ('None' in code.co_names))
         except ParserError as p:
-            self.write( str(p))
+            self.write(str(p))
             self.ERROR = p
             return
 
@@ -1308,17 +1324,17 @@ class Walker(GenericASTTraversal, object):
         ##This would be a nicer piece of code, but I can't get this to work
         ## now, have to find a usable lambda constuct  hG/2000-09-05
         ##params = map(lambda name, default: build_param(ast, name, default),
-        ##	     paramnames, defparams)
+        ##           paramnames, defparams)
         params = []
         for name, default in map(lambda a,b: (a,b), paramnames, defparams):
-            params.append( build_param(ast, name, default) )
+            params.append(build_param(ast, name, default) )
 
         params.reverse() # back to correct order
 
-        if 4 & code.co_flags:	# flag 2 -> variable number of args
+        if 4 & code.co_flags:   # flag 2 -> variable number of args
             params.append('*%s' % code.co_varnames[argc])
             argc += 1
-        if 8 & code.co_flags:	# flag 3 -> keyword args
+        if 8 & code.co_flags:   # flag 3 -> keyword args
             params.append('**%s' % code.co_varnames[argc])
             argc += 1
 
@@ -1412,7 +1428,7 @@ class Walker(GenericASTTraversal, object):
         self.return_none = rn
 
     def build_ast(self, tokens, customize, isLambda=0, noneInNames=False):
-        assert type(tokens) == ListType
+        assert isinstance(tokens, list)
         assert isinstance(tokens[0], Token)
 
         if isLambda:
