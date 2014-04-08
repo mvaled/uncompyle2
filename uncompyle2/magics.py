@@ -1,13 +1,18 @@
+from __future__ import (division as _py3_division,
+                        print_function as _py3_print,
+                        unicode_literals as _py3_unicode,
+                        absolute_import as _py3_abs_import)
+
 import struct
 
 __all__ = ['magics', 'versions']
 
 def __build_magic(magic):
-    return struct.pack('Hcc', magic, '\r', '\n')
+    return struct.pack(str('Hcc'), magic, str('\r'), str('\n'))
 
 def __by_version(magics):
     by_version = {}
-    for m, v in magics.items():
+    for m, v in list(magics.items()):
         by_version[v] = m
     return by_version
 
@@ -46,8 +51,8 @@ versions = {
 magics = __by_version(versions)
 
 def __show(text, magic):
-    print text, struct.unpack('BBBB', magic), \
-          struct.unpack('HBB', magic)
+    print(text, struct.unpack('BBBB', magic), \
+          struct.unpack('HBB', magic))
 
 def test():
     import imp
@@ -55,12 +60,12 @@ def test():
     current = imp.get_magic()
     current_version = magics[current]
     magic_current = by_version[ current_version ]
-    print type(magic_20), len(magic_20), repr(magic_20)
-    print
-    print 'This Python interpreter has version', current_version
+    print(type(magic_20), len(magic_20), repr(magic_20))
+    print()
+    print('This Python interpreter has version', current_version)
     __show('imp.get_magic():\t', current),
     __show('magic[current_version]:\t', magic_current)
     __show('magic_20:\t\t', magic_20)
-    
+
 if __name__ == '__main__':
     test()

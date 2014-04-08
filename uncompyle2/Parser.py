@@ -5,17 +5,28 @@
 #  See main module for license.
 #
 
+from __future__ import (division as _py3_division,
+                        print_function as _py3_print,
+                        unicode_literals as _py3_unicode,
+                        absolute_import as _py3_abs_import)
+
 __all__ = ['parse', 'AST', 'ParserError', 'Parser']
 
-from spark import GenericASTBuilder
+from .spark import GenericASTBuilder
 import string, exceptions, sys
-from UserList import UserList
+from xoutil.collections import UserList
 
-from Scanner import Token
+from .Scanner import Token
+
+try:
+    from sys import intern  # Py3k
+except ImportError:
+    from __builtin__ import intern
+
 
 class AST(UserList):
     def __init__(self, type, kids=[]):
-        self.type = intern(type)
+        self.type = intern(str(type))
         UserList.__init__(self, kids)
 
     def __getslice__(self, low, high):    return self.data[low:high]
@@ -43,7 +54,7 @@ class ParserError(Exception):
     def __str__(self):
         return "Syntax error at or near `%r' token at offset %s" % \
                (self.token, self.offset)
-    
+
 
 class Parser(GenericASTBuilder):
     def __init__(self):
@@ -56,7 +67,7 @@ class Parser(GenericASTBuilder):
         collector to collect this object.
         """
         for dict in (self.rule2func, self.rules, self.rule2name):
-            for i in dict.keys():
+            for i in list(dict.keys()):
                 dict[i] = None
         for i in dir(self):
             setattr(self, i, None)
@@ -66,7 +77,7 @@ class Parser(GenericASTBuilder):
 
     def typestring(self, token):
         return token.type
-    
+
     def p_funcdef(self, args):
         '''
         stmt ::= funcdef
@@ -92,27 +103,27 @@ class Parser(GenericASTBuilder):
         list_iter ::= lc_body
 
         _come_from ::= COME_FROM
-        _come_from ::= 
+        _come_from ::=
 
-        
+
         list_for ::= expr _for designator list_iter JUMP_BACK
-        list_if ::= expr jmp_false list_iter               
-        list_if_not ::= expr jmp_true list_iter               
+        list_if ::= expr jmp_false list_iter
+        list_if_not ::= expr jmp_true list_iter
 
         lc_body ::= expr LIST_APPEND
         '''
-        
+
     def p_setcomp(self, args):
         '''
         expr ::= setcomp
-        
+
         setcomp ::= LOAD_SETCOMP MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
-        
+
         stmt ::= setcomp_func
-        
+
         setcomp_func ::= BUILD_SET_0 LOAD_FAST FOR_ITER designator comp_iter
                 JUMP_BACK RETURN_VALUE RETURN_LAST
-        
+
         comp_iter ::= comp_if
         comp_iter ::= comp_ifnot
         comp_iter ::= comp_for
@@ -133,11 +144,11 @@ class Parser(GenericASTBuilder):
     def p_genexpr(self, args):
         '''
         expr ::= genexpr
-        
+
         genexpr ::= LOAD_GENEXPR MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
-        
+
         stmt ::= genexpr_func
-        
+
         genexpr_func ::= LOAD_FAST FOR_ITER designator comp_iter JUMP_BACK
         '''
 
@@ -147,7 +158,7 @@ class Parser(GenericASTBuilder):
         expr ::= dictcomp
         dictcomp ::= LOAD_DICTCOMP MAKE_FUNCTION_0 expr GET_ITER CALL_FUNCTION_1
         stmt ::= dictcomp_func
-        
+
         dictcomp_func ::= BUILD_MAP LOAD_FAST FOR_ITER designator
                 comp_iter JUMP_BACK RETURN_VALUE RETURN_LAST
 
@@ -179,7 +190,7 @@ class Parser(GenericASTBuilder):
         inplace_op ::= INPLACE_RSHIFT
         inplace_op ::= INPLACE_AND
         inplace_op ::= INPLACE_XOR
-        inplace_op ::= INPLACE_OR 
+        inplace_op ::= INPLACE_OR
         '''
 
     def p_assign(self, args):
@@ -199,11 +210,11 @@ class Parser(GenericASTBuilder):
         stmt ::= print_items_stmt
         stmt ::= print_nl
         stmt ::= print_items_nl_stmt
-        
+
         print_items_stmt ::= expr PRINT_ITEM print_items_opt
         print_items_nl_stmt ::= expr PRINT_ITEM print_items_opt PRINT_NEWLINE_CONT
         print_items_opt ::= print_items
-        print_items_opt ::= 
+        print_items_opt ::=
         print_items ::= print_items print_item
         print_items ::= print_item
         print_item ::= expr PRINT_ITEM_CONT
@@ -224,7 +235,7 @@ class Parser(GenericASTBuilder):
         '''
 
     def p_import20(self, args):
-        '''        
+        '''
         stmt ::= importstmt
         stmt ::= importfrom
         stmt ::= importstar
@@ -236,13 +247,13 @@ class Parser(GenericASTBuilder):
         import_as ::= IMPORT_NAME load_attrs designator
         import_as ::= IMPORT_FROM designator
 
-        importstmt ::= LOAD_CONST LOAD_CONST import_as 
-        importstar ::= LOAD_CONST LOAD_CONST IMPORT_NAME IMPORT_STAR 
+        importstmt ::= LOAD_CONST LOAD_CONST import_as
+        importstar ::= LOAD_CONST LOAD_CONST IMPORT_NAME IMPORT_STAR
         importfrom ::= LOAD_CONST LOAD_CONST IMPORT_NAME importlist2 POP_TOP
-        importstar ::= LOAD_CONST LOAD_CONST IMPORT_NAME_CONT IMPORT_STAR 
+        importstar ::= LOAD_CONST LOAD_CONST IMPORT_NAME_CONT IMPORT_STAR
         importfrom ::= LOAD_CONST LOAD_CONST IMPORT_NAME_CONT importlist2 POP_TOP
         importmultiple ::= LOAD_CONST LOAD_CONST import_as imports_cont
-        
+
         imports_cont ::= imports_cont import_cont
         imports_cont ::= import_cont
         import_cont ::= LOAD_CONST LOAD_CONST import_as_cont
@@ -261,11 +272,11 @@ class Parser(GenericASTBuilder):
         sstmt ::= stmt
         sstmt ::= ifelsestmtr
         sstmt ::= return_stmt RETURN_LAST
-        
+
         stmts_opt ::= stmts
         stmts_opt ::= passstmt
-        passstmt ::= 
-        
+        passstmt ::=
+
         _stmts ::= _stmts stmt
         _stmts ::= stmt
 
@@ -273,7 +284,7 @@ class Parser(GenericASTBuilder):
         c_stmts ::= _stmts lastc_stmt
         c_stmts ::= lastc_stmt
         c_stmts ::= continue_stmts
-        
+
         lastc_stmt ::= iflaststmt
         lastc_stmt ::= whileelselaststmt
         lastc_stmt ::= forelselaststmt
@@ -283,28 +294,28 @@ class Parser(GenericASTBuilder):
 
         c_stmts_opt ::= c_stmts
         c_stmts_opt ::= passstmt
-        
+
         l_stmts ::= _stmts
         l_stmts ::= return_stmts
         l_stmts ::= continue_stmts
         l_stmts ::= _stmts lastl_stmt
         l_stmts ::= lastl_stmt
-        
+
         lastl_stmt ::= iflaststmtl
         lastl_stmt ::= ifelsestmtl
         lastl_stmt ::= forelselaststmtl
         lastl_stmt ::= tryelsestmtl
-        
+
         l_stmts_opt ::= l_stmts
         l_stmts_opt ::= passstmt
-        
+
         suite_stmts ::= _stmts
         suite_stmts ::= return_stmts
         suite_stmts ::= continue_stmts
-        
+
         suite_stmts_opt ::= suite_stmts
         suite_stmts_opt ::= passstmt
-        
+
         else_suite ::= suite_stmts
         else_suitel ::= l_stmts
         else_suitec ::= c_stmts
@@ -326,7 +337,7 @@ class Parser(GenericASTBuilder):
         store_subscr ::= expr expr STORE_SUBSCR
         designator ::= unpack
         designator ::= unpack_list
-        
+
         stmt ::= classdef
         stmt ::= call_stmt
         call_stmt ::= expr POP_TOP
@@ -335,22 +346,22 @@ class Parser(GenericASTBuilder):
         return_stmt ::= ret_expr RETURN_VALUE
         return_stmts ::= return_stmt
         return_stmts ::= _stmts return_stmt
-        
+
         return_if_stmts ::= return_if_stmt
         return_if_stmts ::= _stmts return_if_stmt
         return_if_stmt ::= ret_expr RETURN_END_IF
-        
+
 
         stmt ::= break_stmt
         break_stmt ::= BREAK_LOOP
-        
+
         stmt ::= continue_stmt
         continue_stmt ::= CONTINUE
         continue_stmt ::= CONTINUE_LOOP
         continue_stmts ::= _stmts lastl_stmt continue_stmt
         continue_stmts ::= lastl_stmt continue_stmt
         continue_stmts ::= continue_stmt
-        
+
         stmt ::= raise_stmt0
         stmt ::= raise_stmt1
         stmt ::= raise_stmt2
@@ -360,16 +371,16 @@ class Parser(GenericASTBuilder):
         raise_stmt1 ::= expr RAISE_VARARGS_1
         raise_stmt2 ::= expr expr RAISE_VARARGS_2
         raise_stmt3 ::= expr expr expr RAISE_VARARGS_3
-        
+
         stmt ::= exec_stmt
         exec_stmt ::= expr exprlist DUP_TOP EXEC_STMT
         exec_stmt ::= expr exprlist EXEC_STMT
-        
+
         stmt ::= assert
         stmt ::= assert2
         stmt ::= ifstmt
         stmt ::= ifelsestmt
-        
+
         stmt ::= whilestmt
         stmt ::= whilenotstmt
         stmt ::= while1stmt
@@ -382,7 +393,7 @@ class Parser(GenericASTBuilder):
         stmt ::= tryfinallystmt
         stmt ::= withstmt
         stmt ::= withasstmt
-        
+
         stmt ::= del_stmt
         del_stmt ::= DELETE_FAST
         del_stmt ::= DELETE_NAME
@@ -394,12 +405,12 @@ class Parser(GenericASTBuilder):
         del_stmt ::= delete_subscr
         delete_subscr ::= expr expr DELETE_SUBSCR
         del_stmt ::= expr DELETE_ATTR
-        
+
         kwarg   ::= LOAD_CONST expr
-        
+
         classdef ::= LOAD_CONST expr mkfunc
                     CALL_FUNCTION_0 BUILD_CLASS designator
-        
+
         stmt ::= classdefdeco
         classdefdeco ::= classdefdeco1 designator
         classdefdeco1 ::= expr classdefdeco1 CALL_FUNCTION_1
@@ -408,13 +419,13 @@ class Parser(GenericASTBuilder):
 
         assert ::= assert_expr POP_JUMP_IF_TRUE
                 LOAD_ASSERT RAISE_VARARGS_1
-                
+
         assert2 ::= assert_expr POP_JUMP_IF_TRUE
                 LOAD_ASSERT expr CALL_FUNCTION_1 RAISE_VARARGS_1
-                
+
         assert2 ::= assert_expr POP_JUMP_IF_TRUE
                 LOAD_ASSERT expr RAISE_VARARGS_2
-                
+
         assert_expr ::= expr
         assert_expr ::= assert_expr_or
         assert_expr ::= assert_expr_and
@@ -428,20 +439,20 @@ class Parser(GenericASTBuilder):
 
         jmp_false    ::= POP_JUMP_IF_FALSE
         jmp_true    ::= POP_JUMP_IF_TRUE
-        
+
         ifstmt ::= testexpr _ifstmts_jump
-        
-        
+
+
         testexpr ::= testfalse
         testexpr ::= testtrue
         testfalse ::= expr jmp_false
         testtrue ::= expr jmp_true
-        
+
         _ifstmts_jump ::= return_if_stmts
         _ifstmts_jump ::= c_stmts_opt JUMP_FORWARD COME_FROM
-        
+
         iflaststmt ::= testexpr c_stmts_opt JUMP_ABSOLUTE
-        
+
         iflaststmtl ::= testexpr c_stmts_opt JUMP_BACK
 
         ifelsestmt ::= testexpr c_stmts_opt JUMP_FORWARD else_suite COME_FROM
@@ -451,8 +462,8 @@ class Parser(GenericASTBuilder):
         ifelsestmtr ::= testexpr return_if_stmts return_stmts
 
         ifelsestmtl ::= testexpr c_stmts_opt JUMP_BACK else_suitel
-        
-        
+
+
         trystmt ::= SETUP_EXCEPT suite_stmts_opt POP_BLOCK
                 try_middle COME_FROM
 
@@ -469,37 +480,37 @@ class Parser(GenericASTBuilder):
                 END_FINALLY
         try_middle ::= JUMP_FORWARD COME_FROM except_stmts
                 END_FINALLY COME_FROM
-                
+
         except_stmts ::= except_stmts except_stmt
         except_stmts ::= except_stmt
-        
-        except_stmt ::= except_cond1 except_suite 
-        except_stmt ::= except_cond2 except_suite 
+
+        except_stmt ::= except_cond1 except_suite
+        except_stmt ::= except_cond2 except_suite
         except_stmt ::= except
 
         except_suite ::= c_stmts_opt JUMP_FORWARD
         except_suite ::= c_stmts_opt jmp_abs
         except_suite ::= return_stmts
-                      
+
         except_cond1 ::= DUP_TOP expr COMPARE_OP
-                POP_JUMP_IF_FALSE POP_TOP POP_TOP POP_TOP                
+                POP_JUMP_IF_FALSE POP_TOP POP_TOP POP_TOP
 
         except_cond2 ::= DUP_TOP expr COMPARE_OP
                 POP_JUMP_IF_FALSE POP_TOP designator POP_TOP
-                 
+
         except  ::=  POP_TOP POP_TOP POP_TOP c_stmts_opt JUMP_FORWARD
         except  ::=  POP_TOP POP_TOP POP_TOP c_stmts_opt jmp_abs
         except  ::=  POP_TOP POP_TOP POP_TOP return_stmts
-        
+
         jmp_abs ::= JUMP_ABSOLUTE
         jmp_abs ::= JUMP_BACK
-        
+
 
 
         tryfinallystmt ::= SETUP_FINALLY suite_stmts
                 POP_BLOCK LOAD_CONST
                 COME_FROM suite_stmts_opt END_FINALLY
-                
+
         withstmt ::= expr SETUP_WITH POP_TOP suite_stmts_opt
                 POP_BLOCK LOAD_CONST COME_FROM
                 WITH_CLEANUP END_FINALLY
@@ -537,7 +548,7 @@ class Parser(GenericASTBuilder):
 
         for_block ::= l_stmts_opt JUMP_BACK
         for_block ::= return_stmts _come_from
-        
+
         forstmt ::= SETUP_LOOP expr _for designator
                 for_block POP_BLOCK COME_FROM
 
@@ -587,8 +598,8 @@ class Parser(GenericASTBuilder):
         expr ::= buildslice3
         expr ::= yield
 
-        
-        
+
+
         binary_expr ::= expr expr binary_op
         binary_op ::= BINARY_ADD
         binary_op ::= BINARY_MULTIPLY
@@ -627,7 +638,7 @@ class Parser(GenericASTBuilder):
         slice3 ::= expr expr expr DUP_TOPX_3 SLICE+3
         buildslice3 ::= expr expr expr BUILD_SLICE_3
         buildslice2 ::= expr expr BUILD_SLICE_2
-        
+
         yield ::= expr YIELD_VALUE
 
         _mklambda ::= load_closure mklambda
@@ -638,18 +649,18 @@ class Parser(GenericASTBuilder):
         and  ::= expr POP_JUMP_IF_FALSE expr COME_FROM
         and  ::= expr JUMP_IF_FALSE_OR_POP expr COME_FROM
         and2 ::= _jump POP_JUMP_IF_FALSE COME_FROM expr COME_FROM
-        
+
         expr ::= conditional
         conditional ::= expr POP_JUMP_IF_FALSE expr JUMP_FORWARD expr COME_FROM
         conditional ::= expr POP_JUMP_IF_FALSE expr JUMP_ABSOLUTE expr
         expr ::= conditionalnot
         conditionalnot ::= expr POP_JUMP_IF_TRUE expr JUMP_FORWARD expr COME_FROM
-        conditionalnot ::= expr POP_JUMP_IF_TRUE expr JUMP_ABSOLUTE expr 
+        conditionalnot ::= expr POP_JUMP_IF_TRUE expr JUMP_ABSOLUTE expr
 
         ret_expr ::= expr
         ret_expr ::= ret_and
         ret_expr ::= ret_or
-        
+
         ret_expr_or_cond ::= ret_expr
         ret_expr_or_cond ::= ret_cond
         ret_expr_or_cond ::= ret_cond_not
@@ -661,9 +672,9 @@ class Parser(GenericASTBuilder):
 
         stmt ::= return_lambda
         stmt ::= conditional_lambda
-        
+
         return_lambda ::= ret_expr RETURN_VALUE LAMBDA_MARKER
-        conditional_lambda ::= expr POP_JUMP_IF_FALSE return_if_stmt return_stmt LAMBDA_MARKER 
+        conditional_lambda ::= expr POP_JUMP_IF_FALSE return_if_stmt return_stmt LAMBDA_MARKER
 
         cmp ::= cmp_list
         cmp ::= compare
@@ -710,7 +721,7 @@ class Parser(GenericASTBuilder):
 
     def __ambiguity(self, children):
         # only for debugging! to be removed hG/2000-10-15
-        print children
+        print(children)
         return GenericASTBuilder.ambiguity(self, children)
 
     def resolve(self, list):
@@ -743,9 +754,9 @@ def parse(tokens, customize):
     #    expr ::= expr {expr}^n CALL_FUNCTION_KW_n POP_TOP
     #
     global p
-    for k, v in customize.items():
+    for k, v in list(customize.items()):
         # avoid adding the same rule twice to this parser
-        if p.customized.has_key(k):
+        if k in p.customized:
             continue
         p.customized[k] = None
 
@@ -781,7 +792,7 @@ def parse(tokens, customize):
             na = (v & 0xff)           # positional parameters
             nk = (v >> 8) & 0xff      # keyword parameters
             # number of apply equiv arguments:
-            nak = ( len(op)-len('CALL_FUNCTION') ) / 3
+            nak = (len(op) - len('CALL_FUNCTION')) // 3
             rule = 'call_function ::= expr ' + 'expr '*na + 'kwarg '*nk \
                    + 'expr ' * nak + k
         else:

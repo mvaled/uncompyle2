@@ -8,10 +8,10 @@
 #  distribute, sublicense, and/or sell copies of the Software, and to
 #  permit persons to whom the Software is furnished to do so, subject to
 #  the following conditions:
-#  
+#
 #  The above copyright notice and this permission notice shall be
 #  included in all copies or substantial portions of the Software.
-#  
+#
 #  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 #  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 #  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -26,8 +26,13 @@
 #     Probably a complete rewrite would be sensefull. hG/2000-12-27
 #
 
+from __future__ import (division as _py3_division,
+                        print_function as _py3_print,
+                        unicode_literals as _py3_unicode,
+                        absolute_import as _py3_abs_import)
+
 import sys, types, os
-import Scanner, Walker, verify, magics
+from . import Scanner, Walker, verify, magics
 
 sys.setrecursionlimit(5000)
 __all__ = ['uncompyle_file', 'uncompyle_file', 'main']
@@ -49,7 +54,7 @@ def _load_file(filename):
     try:
         co = compile(source, filename, 'exec')
     except SyntaxError:
-        print >> sys.stderr, '>>Syntax error in', filename
+        print('>>Syntax error in', filename, file=sys.stderr)
         raise
     fp.close()
     return co
@@ -69,9 +74,9 @@ def _load_module(filename):
     try:
         version = magics.versions[magic]
     except KeyError:
-        raise ImportError, "Unknown magic number %s in %s" % (ord(magic[0])+256*ord(magic[1]), filename)
+        raise ImportError("Unknown magic number %s in %s" % (ord(magic[0])+256*ord(magic[1]), filename))
     if version != '2.7':
-        raise ImportError, "This is a Python %s file! Only Python 2.7 files are supported." % version
+        raise ImportError("This is a Python %s file! Only Python 2.7 files are supported." % version)
     #print version
     fp.read(4) # timestamp
     co = marshal.load(fp)
@@ -87,7 +92,7 @@ def uncompyle(version, co, out=None, showasm=0, showast=0, deob=0):
     # store final output stream for case of error
     __real_out = out or sys.stdout
     if co.co_filename:
-        print >>__real_out, '#Embedded file name: %s' % co.co_filename
+        print('#Embedded file name: %s' % co.co_filename, file=__real_out)
     scanner = Scanner.getscanner(version)
     scanner.setShowAsm(showasm, out)
     tokens, customize = scanner.disassemble(co, deob=deob)
@@ -96,8 +101,8 @@ def uncompyle(version, co, out=None, showasm=0, showast=0, deob=0):
     walker = Walker.Walker(out, scanner, showast=showast)
     try:
         ast = walker.build_ast(tokens, customize)
-    except Walker.ParserError, e :  # parser failed, dump disassembly
-        print >>__real_out, e
+    except Walker.ParserError as e :  # parser failed, dump disassembly
+        print(e, file=__real_out)
         raise
 
     del tokens # save memory
@@ -118,7 +123,7 @@ def uncompyle(version, co, out=None, showasm=0, showast=0, deob=0):
     for g in walker.mod_globs:
         walker.write('global %s ## Warning: Unused global\n' % g)
     if walker.pending_newlines:
-        print >>__real_out
+        print(file=__real_out)
     if walker.ERROR:
         raise walker.ERROR
 
@@ -190,7 +195,7 @@ def main(in_base, out_base, files, codes, outfile=None,
             else:
                 outfile += '_dis'
             outstream = _get_outstream(outfile)
-        #print >>sys.stderr, outfile 
+        #print >>sys.stderr, outfile
 
         # try to decomyple the input file
         try:
@@ -210,20 +215,20 @@ def main(in_base, out_base, files, codes, outfile=None,
             import traceback
             traceback.print_exc()
             #raise
-	else: # uncompyle successfull
+        else:  # uncompyle successfull
             if outfile:
                 outstream.close()
             if do_verify:
                 try:
                     verify.compare_code_with_srcfile(infile, outfile)
-                    print "+++ okay decompyling", infile, __memUsage()
+                    print("+++ okay decompyling", infile, __memUsage())
                     okay_files += 1
-                except verify.VerifyCmpError, e:
+                except verify.VerifyCmpError as e:
                     verify_failed_files += 1
                     os.rename(outfile, outfile + '_unverified')
-                    print >>sys.stderr, "### Error Verifiying", file
-                    print >>sys.stderr, e
+                    print("### Error Verifiying", file, file=sys.stderr)
+                    print(e, file=sys.stderr)
             else:
                 okay_files += 1
-                print "+++ okay decompyling", infile, __memUsage()
+                print("+++ okay decompyling", infile, __memUsage())
     return (tot_files, okay_files, failed_files, verify_failed_files)

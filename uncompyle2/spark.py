@@ -1,5 +1,5 @@
 #  Copyright (c) 1998-2002 John Aycock
-#  
+#
 #  Permission is hereby granted, free of charge, to any person obtaining
 #  a copy of this software and associated documentation files (the
 #  "Software"), to deal in the Software without restriction, including
@@ -7,10 +7,10 @@
 #  distribute, sublicense, and/or sell copies of the Software, and to
 #  permit persons to whom the Software is furnished to do so, subject to
 #  the following conditions:
-#  
+#
 #  The above copyright notice and this permission notice shall be
 #  included in all copies or substantial portions of the Software.
-#  
+#
 #  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 #  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 #  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -19,6 +19,11 @@
 #  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 #  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+from __future__ import (division as _py3_division,
+                        print_function as _py3_print,
+                        unicode_literals as _py3_unicode,
+                        absolute_import as _py3_abs_import)
+
 __version__ = 'SPARK-0.7 (pre-alpha-7) uncompyle trim'
 
 def _namelist(instance):
@@ -26,8 +31,8 @@ def _namelist(instance):
     for c in classlist:
         for b in c.__bases__:
             classlist.append(b)
-        for name in c.__dict__.keys():
-            if not namedict.has_key(name):
+        for name in list(c.__dict__.keys()):
+            if name not in namedict:
                 namelist.append(name)
                 namedict[name] = 1
     return namelist
@@ -35,12 +40,13 @@ def _namelist(instance):
 #
 #  Extracted from GenericParser and made global so that [un]picking works.
 #
-class _State:
+class _State(object):
     def __init__(self, stateno, items):
         self.T, self.complete, self.items = [], [], items
         self.stateno = stateno
 
-class GenericParser:
+
+class GenericParser(object):
     #
     #  An Earley parser, as per J. Earley, "An Efficient Context-Free
     #  Parsing Algorithm", CACM 13(2), pp. 94-102.  Also J. C. Earley,
@@ -88,14 +94,14 @@ class GenericParser:
         changes = 1
         while changes:
             changes = 0
-            for k, v in self.edges.items():
+            for k, v in list(self.edges.items()):
                 if v is None:
                     state, sym = k
-                    if self.states.has_key(state):
+                    if state in self.states:
                         self.goto(state, sym)
                         changes = 1
         rv = self.__dict__.copy()
-        for s in self.states.values():
+        for s in list(self.states.values()):
             del s.items
         del rv['rule2func']
         del rv['nullable']
@@ -125,12 +131,13 @@ class GenericParser:
         rules = doc.split()
 
         index = []
-        for i in xrange(len(rules)):
+        # TODO: use six range
+        for i in range(len(rules)):
             if rules[i] == '::=':
                 index.append(i-1)
         index.append(len(rules))
 
-        for i in xrange(len(index)-1):
+        for i in range(len(index)-1):
             lhs = rules[index[i]]
             rhs = rules[index[i]+2:index[i+1]]
             rule = (lhs, tuple(rhs))
@@ -138,7 +145,7 @@ class GenericParser:
             if _preprocess:
                 rule, fn = self.preprocess(rule, func)
 
-            if self.rules.has_key(lhs):
+            if lhs in self.rules:
                 self.rules[lhs].append(rule)
             else:
                 self.rules[lhs] = [ rule ]
@@ -161,7 +168,7 @@ class GenericParser:
         self.nullable = {}
         tbd = []
 
-        for rulelist in self.rules.values():
+        for rulelist in list(self.rules.values()):
             lhs = rulelist[0][0]
             self.nullable[lhs] = 0
             for rule in rulelist:
@@ -176,7 +183,7 @@ class GenericParser:
                 #  grammars.
                 #
                 for sym in rhs:
-                    if not self.rules.has_key(sym):
+                    if sym not in self.rules:
                         break
                 else:
                     tbd.append(rule)
@@ -210,7 +217,7 @@ class GenericParser:
 
     def makeNewRules(self):
         worklist = []
-        for rulelist in self.rules.values():
+        for rulelist in list(self.rules.values()):
             for rule in rulelist:
                 worklist.append((rule, 0, 1, rule))
 
@@ -219,7 +226,7 @@ class GenericParser:
             n = len(rhs)
             while i < n:
                 sym = rhs[i]
-                if not self.rules.has_key(sym) or \
+                if sym not in self.rules or \
                     not self.nullable[sym]:
                         candidate = 0
                         i = i + 1
@@ -236,7 +243,7 @@ class GenericParser:
                 if candidate:
                     lhs = self._NULLABLE+lhs
                     rule = (lhs, rhs)
-                if self.newrules.has_key(lhs):
+                if lhs in self.newrules:
                     self.newrules[lhs].append(rule)
                 else:
                     self.newrules[lhs] = [ rule ]
@@ -246,7 +253,7 @@ class GenericParser:
         return None
 
     def error(self, token):
-        print "Syntax error at or near `%s' token" % token
+        print("Syntax error at or near `%s' token" % token)
         raise SystemExit
 
     def parse(self, tokens):
@@ -263,11 +270,12 @@ class GenericParser:
             self.states = { 0: self.makeState0() }
             self.makeState(0, self._BOF)
 
-        for i in xrange(len(tokens)):
+        # TODO: six range
+        for i in range(len(tokens)):
             sets.append([])
 
             if sets[i] == []:
-                break				
+                break
             self.makeSet(tokens[i], sets, i)
         else:
             sets.append([])
@@ -290,7 +298,8 @@ class GenericParser:
         #
         return self._NULLABLE == sym[0:len(self._NULLABLE)]
 
-    def skip(self, (lhs, rhs), pos=0):
+    def skip(self, lhs_rhs, pos=0):
+        (lhs, rhs) = lhs_rhs
         n = len(rhs)
         while pos < n:
             if not self.isnullable(rhs[pos]):
@@ -311,7 +320,7 @@ class GenericParser:
                 kitems.append((rule, self.skip(rule, pos+1)))
 
         tcore = tuple(sorted(kitems))
-        if self.cores.has_key(tcore):
+        if tcore in self.cores:
             return self.cores[tcore]
         #
         #  Nope, doesn't exist.  Compute it and the associated
@@ -335,13 +344,13 @@ class GenericParser:
 
                 nextSym = rhs[pos]
                 key = (X.stateno, nextSym)
-                if not rules.has_key(nextSym):
-                    if not edges.has_key(key):
+                if nextSym not in rules:
+                    if key not in edges:
                         edges[key] = None
                         X.T.append(nextSym)
                 else:
                     edges[key] = None
-                    if not predicted.has_key(nextSym):
+                    if nextSym not in predicted:
                         predicted[nextSym] = 1
                         for prule in rules[nextSym]:
                             ppos = self.skip(prule)
@@ -366,7 +375,7 @@ class GenericParser:
         #  to do this without accidentally duplicating states.
         #
         tcore = tuple(sorted(predicted.keys()))
-        if self.cores.has_key(tcore):
+        if tcore in self.cores:
             self.edges[(k, None)] = self.cores[tcore]
             return k
 
@@ -377,7 +386,7 @@ class GenericParser:
 
     def goto(self, state, sym):
         key = (state, sym)
-        if not self.edges.has_key(key):
+        if key not in self.edges:
             #
             #  No transitions from state on sym.
             #
@@ -554,7 +563,8 @@ class GenericParser:
         rhs = rule[1]
         attr = [None] * len(rhs)
 
-        for i in xrange(len(rhs)-1, -1, -1):
+        # TODO: six range
+        for i in range(len(rhs)-1, -1, -1):
             attr[i] = self.deriveEpsilon(rhs[i])
         return self.rule2func[self.new2old[rule]](attr)
 
@@ -573,9 +583,9 @@ class GenericParser:
         rhs = rule[1]
         attr = [None] * len(rhs)
 
-        for i in xrange(len(rhs)-1, -1, -1):
+        for i in range(len(rhs)-1, -1, -1):
             sym = rhs[i]
-            if not self.newrules.has_key(sym):
+            if sym not in self.newrules:
                 if sym != self._BOF:
                     attr[i] = tokens[k-1]
                     key = (item, k)
@@ -597,16 +607,16 @@ class GenericParser:
         #	 appears in >1 method.  Also undefined results if rules
         #	 causing the ambiguity appear in the same method.
         #
-        
+
         sortlist = []
         name2index = {}
-        for i in xrange(len(rules)):
+        for i in range(len(rules)):
             lhs, rhs = rule = rules[i]
             name = self.rule2name[self.new2old[rule]]
             sortlist.append((len(rhs), name))
             name2index[name] = i
         sortlist.sort()
-        list = map(lambda (a,b): b, sortlist)
+        list = [a_b[1] for a_b in sortlist]
         return rules[name2index[self.resolve(list)]]
 
     def resolve(self, list):
@@ -661,10 +671,11 @@ class GenericASTBuilder(GenericParser):
 #  preorder traversal.  Node type is determined via the typestring() method.
 #
 
-class GenericASTTraversalPruningException:
+class GenericASTTraversalPruningException(Exception):
     pass
 
-class GenericASTTraversal:
+
+class GenericASTTraversal(object):
     def __init__(self, ast):
         self.ast = ast
 
