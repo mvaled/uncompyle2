@@ -24,7 +24,11 @@ from __future__ import (division as _py3_division,
                         unicode_literals as _py3_unicode,
                         absolute_import as _py3_abs_import)
 
-__version__ = 'SPARK-0.7 (pre-alpha-7) uncompyle trim'
+__version__ = 'SPARK-0.7 (pre-alpha-7) xotl.ql.uncompyle trim'
+
+
+from xoutil.six.moves import range
+
 
 def _namelist(instance):
     namelist, namedict, classlist = [], {}, [instance.__class__]
@@ -36,6 +40,7 @@ def _namelist(instance):
                 namelist.append(name)
                 namedict[name] = 1
     return namelist
+
 
 #
 #  Extracted from GenericParser and made global so that [un]picking works.
@@ -113,7 +118,7 @@ class GenericParser(object):
         self.rule2func = {}
         self.rule2name = {}
         self.collectRules()
-        start = D['rules'][self._START][0][1][1]	# Blech.
+        start = D['rules'][self._START][0][1][1]  # Blech.
         self.augment(start)
         D['rule2func'] = self.rule2func
         D['makeSet'] = self.makeSet_fast
@@ -124,14 +129,14 @@ class GenericParser(object):
     #  thee not with this; nor shall thee toucheth the _preprocess
     #  argument to addRule.
     #
-    def preprocess(self, rule, func):	return rule, func
+    def preprocess(self, rule, func):
+        return rule, func
 
     def addRule(self, doc, func, _preprocess=1):
         fn = func
         rules = doc.split()
 
         index = []
-        # TODO: use six range
         for i in range(len(rules)):
             if rules[i] == '::=':
                 index.append(i-1)
@@ -148,7 +153,7 @@ class GenericParser(object):
             if lhs in self.rules:
                 self.rules[lhs].append(rule)
             else:
-                self.rules[lhs] = [ rule ]
+                self.rules[lhs] = [rule]
             self.rule2func[rule] = fn
             self.rule2name[rule] = func.__name__[2:]
         self.ruleschanged = 1
@@ -246,7 +251,7 @@ class GenericParser(object):
                 if lhs in self.newrules:
                     self.newrules[lhs].append(rule)
                 else:
-                    self.newrules[lhs] = [ rule ]
+                    self.newrules[lhs] = [rule]
                 self.new2old[rule] = oldrule
 
     def typestring(self, token):
@@ -257,7 +262,7 @@ class GenericParser(object):
         raise SystemExit
 
     def parse(self, tokens):
-        sets = [ [(1,0), (2,0)] ]
+        sets = [[(1, 0), (2, 0)]]
         self.links = {}
 
         if self.ruleschanged:
@@ -267,10 +272,9 @@ class GenericParser(object):
             self.makeNewRules()
             self.ruleschanged = 0
             self.edges, self.cores = {}, {}
-            self.states = { 0: self.makeState0() }
+            self.states = {0: self.makeState0()}
             self.makeState(0, self._BOF)
 
-        # TODO: six range
         for i in range(len(tokens)):
             sets.append([])
 
@@ -289,7 +293,7 @@ class GenericParser(object):
                 self.error(None)
 
         return self.buildTree(self._START, finalitem,
-                    tokens, len(sets)-2)
+                              tokens, len(sets)-2)
 
     def isnullable(self, sym):
         #
@@ -454,7 +458,7 @@ class GenericParser(object):
                         why = (item, i, rule)
                         pptr = (pitem, parent)
                         self.add(cur, (k, pparent),
-                                i, pptr, why)
+                                 i, pptr, why)
                         nk = self.goto(k, None)
                         if nk is not None:
                             self.add(cur, (nk, i))
@@ -563,7 +567,6 @@ class GenericParser(object):
         rhs = rule[1]
         attr = [None] * len(rhs)
 
-        # TODO: six range
         for i in range(len(rhs)-1, -1, -1):
             attr[i] = self.deriveEpsilon(rhs[i])
         return self.rule2func[self.new2old[rule]](attr)
@@ -597,7 +600,7 @@ class GenericParser(object):
                 key = (item, k)
                 why = self.causal(key)
                 attr[i] = self.buildTree(sym, why[0],
-                            tokens, why[1])
+                                         tokens, why[1])
                 item, k = self.predecessor(key, why)
         return self.rule2func[self.new2old[rule]](attr)
 
@@ -627,6 +630,7 @@ class GenericParser(object):
         #
         return list[0]
 
+
 #
 #  GenericASTBuilder automagically constructs a concrete/abstract syntax tree
 #  for a given input.  The extra argument is a class (not an instance!)
@@ -634,7 +638,6 @@ class GenericParser(object):
 #
 #  XXX - silently overrides any user code in methods.
 #
-
 class GenericASTBuilder(GenericParser):
     def __init__(self, AST, start):
         GenericParser.__init__(self, start)
@@ -642,8 +645,7 @@ class GenericASTBuilder(GenericParser):
 
     def preprocess(self, rule, func):
         rebind = lambda lhs, self=self: \
-                lambda args, lhs=lhs, self=self: \
-                self.buildASTNode(args, lhs)
+                 lambda args, lhs=lhs, self=self: self.buildASTNode(args, lhs)
         lhs, rhs = rule
         return rule, rebind(lhs)
 
@@ -661,6 +663,7 @@ class GenericASTBuilder(GenericParser):
         rv[:len(args)] = args
         return rv
 
+
 #
 #  GenericASTTraversal is a Visitor pattern according to Design Patterns.  For
 #  each node it attempts to invoke the method n_<node type>, falling
@@ -670,7 +673,6 @@ class GenericASTBuilder(GenericParser):
 #  of a subtree, call the prune() method -- this only makes sense for a
 #  preorder traversal.  Node type is determined via the typestring() method.
 #
-
 class GenericASTTraversalPruningException(Exception):
     pass
 

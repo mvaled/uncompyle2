@@ -28,15 +28,18 @@ class AST(UserList):
         self.type = intern(str(type))
         UserList.__init__(self, kids)
 
-    def __getslice__(self, low, high):    return self.data[low:high]
+    def __getitem__(self, item):
+        return self.data[item]
+
     def __eq__(self, o):
         if isinstance(o, AST):
             return self.type == o.type \
-                   and UserList.__eq__(self, o)
+                and UserList.__eq__(self, o)
         else:
             return self.type == o
 
-    def __hash__(self):            return hash(self.type)
+    def __hash__(self):
+        return hash(self.type)
 
     def __repr__(self, indent=''):
         rv = str(self.type)
